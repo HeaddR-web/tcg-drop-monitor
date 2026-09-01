@@ -14,6 +14,7 @@ spielspezifisch.
 |---|---|
 | `monitor.py` | Hauptmelder. Scannt Shops (HTML-Scraper und Shopify-Kataloge) auf neue oder wieder lieferbare Ware |
 | `drops.py` | Drop-Radar für Vorbestellungen, Kollaborationen und News-Quellen |
+| `feedback.py` | Holt die Daumen-hoch/runter-Klicks unter den Meldungen ab und schreibt sie mit. Darf nur an EINER Stelle laufen, weil `getUpdates` das Postfach beim Lesen leert |
 | `termine.py` | Termin-Wecker. Meldet 7 Tage, 1 Tag und am Tag selbst vor einem bekannten Release |
 | `sniper.py` | Enges Zeitfenster um einen bekannten Termin, kurzer Abstand statt Dauerlauf |
 | `marktwert.py` | Grobe Einschätzung, ob ein Fund über oder unter Marktwert liegt |
