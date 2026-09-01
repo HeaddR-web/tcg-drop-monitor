@@ -857,9 +857,9 @@ def speichere_gemeldet(daten: dict) -> None:
 def notify(text: str, knoepfe: list = None) -> bool:
     """True, wenn zugestellt (oder lokal ausgegeben). False bei Versandfehler.
 
-    knoepfe ist eine Telegram-Tastatur (inline_keyboard). Sie haengt nur an der
-    letzten Teilnachricht, sonst klebt sie bei langen Meldungen mehrfach unter
-    demselben Text.
+    knoepfe ist eine Telegram-Tastatur (inline_keyboard). Sie haengt an genau
+    EINER Teilnachricht, und zwar an der ersten: dort stehen die nummerierten
+    Treffer [1] bis [8], auf die sich die Knoepfe beziehen.
     """
     if not BOT_TOKEN or not CHAT_ID:
         print("[WARN] Telegram-Credentials fehlen, Ausgabe nur lokal:")
@@ -868,15 +868,15 @@ def notify(text: str, knoepfe: list = None) -> bool:
     # Telegram-Limit 4096 Zeichen: lange Meldungen an Absatzgrenzen aufteilen
     if len(text) > 3800:
         ok = True
-        chunk, size = [], 0
+        chunk, size, erste = [], 0, True
         for block in text.split("\n\n"):
             if size + len(block) > 3800 and chunk:
-                ok = _send("\n\n".join(chunk)) and ok
-                chunk, size = [], 0
+                ok = _send("\n\n".join(chunk), knoepfe if erste else None) and ok
+                chunk, size, erste = [], 0, False
             chunk.append(block)
             size += len(block) + 2
         if chunk:
-            ok = _send("\n\n".join(chunk), knoepfe) and ok
+            ok = _send("\n\n".join(chunk), knoepfe if erste else None) and ok
         return ok
     return _send(text, knoepfe)
 

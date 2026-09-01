@@ -354,7 +354,7 @@ def save_state(seen: set) -> None:
     STATE_FILE.write_text(json.dumps(sorted(seen), ensure_ascii=False))
 
 
-def _send(text: str) -> None:
+def _send(text: str, knoepfe: list = None) -> None:
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
@@ -363,6 +363,7 @@ def _send(text: str) -> None:
                 "text": text,
                 "parse_mode": "HTML",
                 "disable_web_page_preview": True,
+                **({"reply_markup": {"inline_keyboard": knoepfe}} if knoepfe else {}),
             },
             timeout=20,
         )
@@ -372,23 +373,25 @@ def _send(text: str) -> None:
         print(f"[WARN] Telegram nicht erreichbar: {e}")
 
 
-def notify(text: str) -> None:
+def notify(text: str, knoepfe: list = None) -> None:
+    """knoepfe ist die Bewertungs-Tastatur. Sie haengt unter genau EINER
+    Teilnachricht, und zwar der ersten: dort stehen die nummerierten Treffer."""
     if not BOT_TOKEN or not CHAT_ID:
         print("[WARN] Telegram-Credentials fehlen, Ausgabe nur lokal:")
         print(text)
         return
     if len(text) > 3800:
-        chunk, size = [], 0
+        chunk, size, erste = [], 0, True
         for block in text.split("\n\n"):
             if size + len(block) > 3800 and chunk:
-                _send("\n\n".join(chunk))
-                chunk, size = [], 0
+                _send("\n\n".join(chunk), knoepfe if erste else None)
+                chunk, size, erste = [], 0, False
             chunk.append(block)
             size += len(block) + 2
         if chunk:
-            _send("\n\n".join(chunk))
+            _send("\n\n".join(chunk), knoepfe if erste else None)
         return
-    _send(text)
+    _send(text, knoepfe)
 
 
 def fetch(url: str, name: str) -> str:
@@ -703,7 +706,33 @@ def main() -> int:
         scored.sort(key=lambda x: (not ist_jubilaeum(x[3]), x[0], not is_prio(x[3]), x[1]))
 
         lines = ["<b>Drop-Radar – 30 Jahre zuerst, dann schnellste Flips</b>", ""]
+        # Bewertungs-Knoepfe wie beim Monitor. Die Helfer liegen dort, damit
+        # beide Melder in dasselbe Nachschlagewerk schreiben und feedback.py
+        # nur eine Datei kennen muss.
+        from monitor import MAX_BEWERTBAR, lade_gemeldet, speichere_gemeldet
+        knoepfe = []
+        gemeldet = lade_gemeldet()
+        nummer = 0
         trenner_gesetzt = False
+
+        def knopf(fp: str, shop: str, title: str, url: str) -> str:
+            """Vergibt die naechste Nummer und haengt die Knoepfe an. Gibt die
+            sichtbare Marke zurueck, leer wenn das Kontingent voll ist."""
+            nonlocal nummer
+            nummer += 1
+            if nummer > MAX_BEWERTBAR:
+                return ""
+            knoepfe.append([
+                {"text": f"👍 {nummer}", "callback_data": f"g:{fp}:{nummer}"},
+                {"text": f"👎 {nummer}", "callback_data": f"s:{fp}:{nummer}"},
+            ])
+            gemeldet[fp] = {
+                "shop": shop,
+                "titel": title,
+                "url": url,
+                "wann": time.strftime("%Y-%m-%d %H:%M"),
+            }
+            return f"<code>[{nummer}]</code> "
         for rank, cat, shop, title, url, price, atext in scored:
             if not ist_jubilaeum(title) and not trenner_gesetzt:
                 lines.append("———— sonstige Pokémon-Treffer ————\n")
@@ -712,6 +741,7 @@ def main() -> int:
                 # Ankündigungen kompakt: Titel + Link reichen, Bewertung folgt
                 # erst, wenn das Produkt bei einem Händler auftaucht.
                 marke = "🎂 30 JAHRE · " if ist_jubilaeum(title) else ""
+                marke = knopf(fingerprint(shop, title, url), shop, title, url) + marke
                 lines.append(
                     f"{marke}📰 <b>{shop}</b> · <a href=\"{escape(url, quote=True)}\">ARTIKEL</a>\n"
                     f"{escape(title)}\n"
@@ -728,6 +758,7 @@ def main() -> int:
                 wert = marktwert.bewertung(title, price, game) + "\n"
             except Exception as e:
                 print(f"[Marktwert] übersprungen: {e}")
+            flag = knopf(fingerprint(shop, title, url), shop, title, url) + flag
             lines.append(
                 f"{flag}<b>{cat} · {shop}</b> · {tag} · <a href=\"{escape(url, quote=True)}\">LINK</a>\n"
                 f"{escape(title)}\n"
@@ -735,7 +766,10 @@ def main() -> int:
                 f"{wert}"
                 f"↳ Resell: {resell_links(title, cat)}\n"
             )
-        notify("\n".join(lines))
+        if nummer > MAX_BEWERTBAR:
+            lines.append(f"<i>Bewerten geht fuer die ersten {MAX_BEWERTBAR} Treffer.</i>\n")
+        notify("\n".join(lines), knoepfe or None)
+        speichere_gemeldet(gemeldet)
         print(f"--> {len(new_items)} neue Drops gemeldet")
     else:
         print("--> nichts Neues")
