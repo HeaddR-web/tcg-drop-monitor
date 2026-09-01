@@ -96,19 +96,24 @@ echo "$NOW" > "$HB"
 
 echo "=== $(date '+%F %H:%M') Lauf gestartet ===" >> "$DATA/monitor.log"
 
-# 1) Pokemon-Monitor ueber ALLE Quellen. Frueher lief hier nur Amazon,
-#    MediaMarkt und Saturn, den Rest machte GitHub. Solange GitHub steht,
-#    laeuft alles hier.
+# 1) Pokemon-Monitor, aber NUR die drei Haendler, die Cloud-IPs blocken.
+#    Seit 01.09.2026 laeuft der Rest wieder auf GitHub, dort im oeffentlichen
+#    Repo HeaddR-web/tcg-drop-monitor mit unbegrenzten Actions-Minuten.
+#    WICHTIG: die Liste hier und SOURCES_EXCLUDE in .github/workflows/monitor.yml
+#    muessen sich exakt ergaenzen. Ueberschneiden sie sich, kommt jeder Treffer
+#    doppelt, weil beide Seiten ein eigenes Gedaechtnis haben.
 STATE_FILE="$DATA/state_local.json" \
+SOURCES_ONLY="Amazon.de,MediaMarkt,Saturn,Games Island" \
   "$PY" "$REPO/monitor.py" >> "$DATA/monitor.log" 2>&1
 
-# 2) Drop-Radar (Pokemon-Vorbestellungen + Pokemon-News).
-#    Stuendlich reicht, wie auf GitHub auch.
-if [ "$(cat "$DATA/drops_last_run" 2>/dev/null)" != "$(date +%Y-%m-%dT%H)" ]; then
-  STATE_FILE="$DATA/drops_state_local.json" \
-    "$PY" "$REPO/drops.py" >> "$DATA/monitor.log" 2>&1
-  date +%Y-%m-%dT%H > "$DATA/drops_last_run"
-fi
+# 2) Drop-Radar: laeuft seit 01.09.2026 in der Cloud (drops.yml, stuendlich).
+#    Die News-Quellen blocken keine Cloud-IPs, es gibt also keinen Grund, sie
+#    hier nochmal zu holen. Doppelt laufen hiesse doppelt melden.
+# if [ "$(cat "$DATA/drops_last_run" 2>/dev/null)" != "$(date +%Y-%m-%dT%H)" ]; then
+#   STATE_FILE="$DATA/drops_state_local.json" \
+#     "$PY" "$REPO/drops.py" >> "$DATA/monitor.log" 2>&1
+#   date +%Y-%m-%dT%H > "$DATA/drops_last_run"
+# fi
 
 # 3) Angebots-Radar: PAUSIERT seit 23.08.2026 (Watchlist leer, nur Pokemon).
 #    Sobald belegte Pokemon-Suchen drin stehen, wieder einkommentieren.

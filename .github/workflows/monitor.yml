@@ -27,7 +27,9 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           # Diese Haendler blocken Cloud-IPs und liefern hier nur leere Listen.
           # Sie laufen ueber den lokalen Mac-Laeufer (scripts/local-monitor.sh).
-          SOURCES_EXCLUDE: "Amazon.de,MediaMarkt,Saturn"
+          # Games Island laeuft aus der Cloud in einen Verbindungs-Timeout,
+          # gemessen am 01.09.2026. Vom Mac aus antwortet der Shop normal.
+          SOURCES_EXCLUDE: "Amazon.de,MediaMarkt,Saturn,Games Island"
         run: python monitor.py
 
       - name: State committen
