@@ -1,0 +1,48 @@
+name: Telegram-Bewertungen abholen
+
+# Holt die Daumen-hoch/runter-Klicks ab, die unter den Treffer-Meldungen
+# haengen. NUR HIER darf gepollt werden: getUpdates leert das Postfach beim
+# Lesen, ein zweiter Poller (etwa der Mac) wuerde Klicks wegschnappen.
+
+on:
+  schedule:
+    - cron: "*/5 5-20 * * *"   # alle 5 Min, 7:00-22:55 deutscher Zeit
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  abholen:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: telegram-getupdates   # nie zwei Laeufe gleichzeitig am Postfach
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencies
+        run: pip install requests
+
+      - name: Bewertungen abholen
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: python feedback.py
+
+      - name: Bewertungen committen
+        run: |
+          git config user.name "monitor-bot"
+          git config user.email "monitor@localhost"
+          git add bewertungen.json feedback_state.json || true
+          git diff --staged --quiet && exit 0
+          git commit -m "bewertungen update"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main && git push && exit 0
+            sleep $((RANDOM % 5 + 2))
+          done
+          echo "Bewertungs-Push nach 5 Versuchen fehlgeschlagen" >&2

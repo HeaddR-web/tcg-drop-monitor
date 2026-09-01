@@ -824,8 +824,43 @@ def save_state(seen: dict) -> None:
     STATE_FILE.write_text(json.dumps(seen, ensure_ascii=False, sort_keys=True))
 
 
-def notify(text: str) -> bool:
-    """True, wenn zugestellt (oder lokal ausgegeben). False bei Versandfehler."""
+# Wieviele Treffer einer Meldung Bewertungs-Knoepfe bekommen. Mehr als das
+# macht die Tastatur unter der Nachricht laenger als die Nachricht selbst.
+MAX_BEWERTBAR = 8
+# Nachschlagewerk fuer feedback.py: welcher Fingerabdruck war welches Produkt.
+# Ohne das steht in der Bewertung nur ein Hash und niemand weiss, was bewertet
+# wurde. Bewusst getrennt von state.json, damit ein Rueckbau der Bewertungen
+# den Melde-Zustand nicht anfasst.
+GEMELDET_FILE = Path(os.environ.get("GEMELDET_FILE", "gemeldet.json"))
+GEMELDET_MAX = 400
+
+
+def lade_gemeldet() -> dict:
+    if GEMELDET_FILE.exists():
+        try:
+            data = json.loads(GEMELDET_FILE.read_text())
+            return dict(data) if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def speichere_gemeldet(daten: dict) -> None:
+    # Nur die juengsten Eintraege behalten, sonst waechst die Datei ewig und
+    # jeder Cloud-Lauf liest sie neu ein.
+    if len(daten) > GEMELDET_MAX:
+        neueste = sorted(daten.items(), key=lambda kv: kv[1].get("wann", ""), reverse=True)
+        daten = dict(neueste[:GEMELDET_MAX])
+    GEMELDET_FILE.write_text(json.dumps(daten, ensure_ascii=False, indent=1, sort_keys=True))
+
+
+def notify(text: str, knoepfe: list = None) -> bool:
+    """True, wenn zugestellt (oder lokal ausgegeben). False bei Versandfehler.
+
+    knoepfe ist eine Telegram-Tastatur (inline_keyboard). Sie haengt nur an der
+    letzten Teilnachricht, sonst klebt sie bei langen Meldungen mehrfach unter
+    demselben Text.
+    """
     if not BOT_TOKEN or not CHAT_ID:
         print("[WARN] Telegram-Credentials fehlen, Ausgabe nur lokal:")
         print(text)
@@ -841,12 +876,12 @@ def notify(text: str) -> bool:
             chunk.append(block)
             size += len(block) + 2
         if chunk:
-            ok = _send("\n\n".join(chunk)) and ok
+            ok = _send("\n\n".join(chunk), knoepfe) and ok
         return ok
-    return _send(text)
+    return _send(text, knoepfe)
 
 
-def _send(text: str) -> bool:
+def _send(text: str, knoepfe: list = None) -> bool:
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
@@ -855,6 +890,7 @@ def _send(text: str) -> bool:
                 "text": text,
                 "parse_mode": "HTML",
                 "disable_web_page_preview": False,
+                **({"reply_markup": {"inline_keyboard": knoepfe}} if knoepfe else {}),
             },
             timeout=20,
         )
@@ -1278,6 +1314,11 @@ def main() -> int:
             )
 
         lines = ["<b>Pokémon 30 Jahre – neue Treffer</b>", ""]
+        # Bewertungs-Knoepfe: hoechstens fuer die ersten acht Treffer, sonst
+        # wird die Tastatur unter der Nachricht laenger als die Nachricht.
+        knoepfe = []
+        gemeldet = lade_gemeldet()
+        nummer = 0
         # Sichtbare Trennung: was nicht zur 30-Jahre-Linie gehoert, steht
         # unter einem eigenen Strich. Oben nur das, worauf es ankommt.
         trenner_gesetzt = False
@@ -1309,13 +1350,34 @@ def main() -> int:
                 wert = marktwert.bewertung(title, price) + "\n"
             except Exception as e:
                 print(f"[Marktwert] übersprungen: {e}")
+            nummer += 1
+            marke = ""
+            if nummer <= MAX_BEWERTBAR:
+                marke = f"<code>[{nummer}]</code> "
+                knoepfe.append([
+                    # Die Nummer steht mit im callback_data, damit feedback.py
+                    # den Titel notfalls aus dem Nachrichtentext lesen kann.
+                    # Das rettet die Zuordnung fuer die vier Shops, die lokal
+                    # laufen und deren gemeldet.json nie in der Cloud landet.
+                    {"text": f"👍 {nummer}", "callback_data": f"g:{_fp}:{nummer}"},
+                    {"text": f"👎 {nummer}", "callback_data": f"s:{_fp}:{nummer}"},
+                ])
+                gemeldet[_fp] = {
+                    "shop": shop,
+                    "titel": title,
+                    "url": url,
+                    "wann": time.strftime("%Y-%m-%d %H:%M"),
+                }
             lines.append(
-                f"{flag}<b>{shop}</b> · {tag} · <a href=\"{escape(url, quote=True)}\">LINK</a>\n"
+                f"{marke}{flag}<b>{shop}</b> · {tag} · <a href=\"{escape(url, quote=True)}\">LINK</a>\n"
                 f"{escape(title)}\n"
                 f"{wert}"
                 f"↳ Resell: {resell_links(title)}\n"
             )
-        if notify("\n".join(lines)):
+        if nummer > MAX_BEWERTBAR:
+            lines.append(f"<i>Bewerten geht fuer die ersten {MAX_BEWERTBAR} Treffer.</i>\n")
+        if notify("\n".join(lines), knoepfe or None):
+            speichere_gemeldet(gemeldet)
             # Erst nach erfolgreichem Versand als erledigt merken, sonst gehen
             # Treffer bei einem Telegram-Fehler dauerhaft verloren.
             for *_rest, fp in new_items:
