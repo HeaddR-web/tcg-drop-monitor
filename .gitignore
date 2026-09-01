@@ -1,11 +1,11 @@
 .env.local
 .env
-state.json
+# state.json und drops_state.json sind ABSICHTLICH im Repo: die GitHub-Actions
+# schreiben ihr Gedaechtnis dort hinein. Ohne sie gilt beim naechsten Lauf jeder
+# bekannte Treffer als neu und Telegram wird geflutet.
 state_local.json
-drops_state.json
 drops_state_local.json
 termine_state.json
 angebote_state.json
-last_run.txt
 __pycache__/
 .DS_Store
