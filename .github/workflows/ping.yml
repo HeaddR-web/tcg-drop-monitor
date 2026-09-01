@@ -1,0 +1,34 @@
+# Selbsttest. Laeuft NIE nach Zeitplan, nur von Hand.
+# Beantwortet die eine Frage, die kein anderer Lauf beantwortet: kommen die
+# hinterlegten Secrets wirklich bei Telegram an? Ein Lauf ohne neue Treffer
+# meldet naemlich "nichts Neues" und sagt damit gar nichts ueber den Zugang.
+name: Telegram-Selbsttest
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Testnachricht schicken
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          if [ -z "$TG_BOT_TOKEN" ] || [ -z "$TG_CHAT_ID" ]; then
+            echo "FEHLER: Secrets fehlen im Repo"; exit 1
+          fi
+          # Antwort NICHT ausgeben: darin stehen Chat-Name und Chat-ID.
+          # Nur das Feld ok wird geprueft.
+          ANTWORT=$(curl -s -X POST \
+            "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=Selbsttest aus der Cloud: der Melder erreicht diesen Chat.")
+          if printf '%s' "$ANTWORT" | grep -q '"ok":true'; then
+            echo "Telegram hat die Nachricht angenommen."
+          else
+            echo "Telegram hat abgelehnt. Fehlercode:"
+            printf '%s' "$ANTWORT" | sed -E 's/.*"error_code":([0-9]+).*/\1/'
+            exit 1
+          fi
