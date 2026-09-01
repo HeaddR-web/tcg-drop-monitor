@@ -1,0 +1,58 @@
+name: Raffle-Schnellpass
+
+# Laeuft dicht getaktet neben dem normalen Monitor und meldet NUR Zeitkritisches:
+# Raffles, Live-Drops und frisch angelegte Ware. Alles andere laesst er bewusst
+# liegen, damit der 15-Minuten-Lauf es weiterhin regulaer meldet.
+# Grund fuer den dichten Takt: Raffles sind oft nur Stunden online, die zwei
+# Feenturm-Raffles vom 10.08.2026 waren am selben Tag schon wieder verschwunden.
+
+on:
+  schedule:
+    - cron: "*/5 5-19 * * *"    # alle 5 Min, 7:00-21:55 deutscher Zeit. Fenster 7-22 Uhr
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # Nie zwei Schnellpaesse gleichzeitig: sonst schreiben beide den State und
+  # es kommen Doppelmeldungen.
+  group: schnellpass
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Schnellpass laufen lassen
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          EILIG_ONLY: "1"
+          # Nur die Katalog-Feeds: die liefern Anlage-Zeitpunkt und Beschreibung
+          # mit, und nur darauf beruht die Erkennung von Tarnnamen und Fristen.
+          SOURCES_ONLY: >-
+            Feenturm (Katalog),GeeksHeaven (Katalog),CardCosmos (Katalog),ChiefCards (Katalog),Pokitrio (Katalog),CardsForAll (Katalog),Kartenbasis (Katalog),Kofuku (Katalog),Deckshop (Katalog)
+        run: python monitor.py
+
+      - name: State committen
+        run: |
+          git config user.name "monitor-bot"
+          git config user.email "monitor@localhost"
+          git add state.json last_run.txt || true
+          git diff --staged --quiet && exit 0
+          git commit -m "state update (schnellpass)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main && git push && exit 0
+            sleep $((RANDOM % 5 + 2))
+          done
+          echo "State-Push nach 5 Versuchen fehlgeschlagen" >&2

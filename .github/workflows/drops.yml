@@ -1,0 +1,42 @@
+name: Drop-Radar
+
+on:
+  schedule:
+    - cron: "17 5-19 * * *"   # stuendlich (Minute 17), 7-21 Uhr deutscher Zeit. Fenster 7-22 Uhr
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Drop-Radar laufen lassen
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: python drops.py
+
+      - name: State committen
+        run: |
+          git config user.name "monitor-bot"
+          git config user.email "monitor@localhost"
+          git add drops_state.json || true
+          git diff --staged --quiet && exit 0
+          git commit -m "drops state update"
+          # Robust gegen Push-Races mit dem Pokémon-Monitor-Workflow.
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main && git push && exit 0
+            sleep $((RANDOM % 5 + 2))
+          done
+          echo "Drops-State-Push nach 5 Versuchen fehlgeschlagen" >&2
