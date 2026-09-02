@@ -74,7 +74,7 @@ ZIELLISTE = [
 ]
 
 # ZIELSETS (seit 02.09.2026): die laufenden Sets stehen in zielsets.txt, einer
-# Datei, die von Hand gepflegt wird. Anlass: am 23.08. flogen Prismatic, Erhabene
+# Datei, die Stefanie selbst pflegt. Anlass: am 23.08. flogen Prismatic, Erhabene
 # Helden und Co. als "Rauschquelle" aus dem Code, und eine Woche spaeter ging die
 # Mega-Entwicklung-Top-Trainer-Box bei MediaMarkt Oesterreich (60 Euro, Markt
 # 120) ungemeldet durch. Die Ansage dazu: ALLE laufenden Sets sind gewollt, nicht
@@ -87,6 +87,57 @@ KEYWORDS = KEYWORDS + ZIELLISTE + [z for z in ZIELSETS if z not in KEYWORDS]
 # Produkte, die uns besonders interessieren (Prio-Markierung im Alert)
 PRIO = ["ultra-premium", "ultra premium", "upc", "top-trainer", "top trainer", "ttb",
         "elite trainer", "etb", "display"]   # ETB seit 02.09.2026 (60 -> 120 gemessen)
+
+# --- Zielprodukte ausserhalb Pokemon (Ansage 02.09.2026: "auch PS5 Pro") ----
+# Sachen, die im Handel guenstiger sind als auf dem Zweitmarkt, egal ob zum
+# Flippen oder fuer die eigene Sammlung. Sie umgehen alle Pokemon-Pruefungen
+# (versiegelt, Stichwoerter, Cardmarket) und haben ihre eigene UVP-Grenze:
+# gemeldet wird nur bis UVP plus 2 Prozent, denn ueber UVP ist es der
+# Marktplatz-Haendler, nicht der Laden. Der Marktwert ist von Hand gepflegt
+# und traegt seine Quelle, damit man sieht, wie alt die Zahl ist.
+ZIELPRODUKTE = [
+    {
+        "name": "PS5 Pro",
+        # Titel wird vor dem Vergleich normalisiert: "PlayStation®5 Pro",
+        # "PlayStation 5 Pro" und "PS5 PRO" landen alle auf "ps5 pro".
+        "muss": ["ps5 pro"],
+        # Zubehoer und Spiele, die "PS5 Pro" im Namen tragen
+        "nicht": ["controller", "ladestation", "headset", "hülle", "huelle",
+                  "cover", "ständer", "staender", "kühl", "kuehl", "skin",
+                  "faceplate", "abdeckung", "halterung", "tasche", "kabel",
+                  "[playstation 5]", "ssd", "laufwerk", "disc drive", "kamera",
+                  "fernbedienung", "gebraucht", "defekt", "b-ware", "refurb"],
+        "uvp": 899.99,
+        "markt": 1200.0,
+        "markt_quelle": "MediaMarkt/Saturn-Marktplatz 1.300-1.350, "
+                        "Computerbase-Vergleich 1.100-1.300, Stand 02.09.2026",
+    },
+]
+
+
+def _ziel_norm(title: str) -> str:
+    t = title.lower().replace("®", "").replace("™", "")
+    t = t.replace("playstation 5", "ps5").replace("playstation5", "ps5")
+    t = t.replace("playstation®5", "ps5")
+    return " ".join(t.split())
+
+
+def ziel_treffer(title: str):
+    """Gibt das passende Zielprodukt zurueck, sonst None."""
+    t = _ziel_norm(title)
+    for z in ZIELPRODUKTE:
+        if all(m in t for m in z["muss"]) and not any(n in t for n in z["nicht"]):
+            return z
+    return None
+
+
+def ziel_bewertung(z: dict, preis) -> str:
+    if not preis:
+        return f"🎯 ZIEL {z['name']} · UVP {z['uvp']:.2f} € · Markt ~{z['markt']:.0f} € ({z['markt_quelle']})"
+    spanne = z["markt"] - preis
+    return (f"🎯 ZIEL {z['name']} · Einkauf {preis:.0f} € · Markt ~{z['markt']:.0f} € "
+            f"→ Spanne <b>{spanne:+.0f} €</b> vor Gebühren\n"
+            f"   Marktwert-Quelle: {z['markt_quelle']}")
 
 # Zubehoer/Einzelkram, der nie gemeldet werden soll
 # Zwei Stufen, und der Unterschied ist wichtig.
@@ -134,7 +185,7 @@ PRICE_RE = re.compile(r"(\d{1,4})[.,](\d{2})\s*€|€\s*(\d{1,4})[.,](\d{2})")
 
 UVP_TOLERANZ = 1.20     # bis 20 Prozent ueber UVP gilt noch als Retail
 
-# Fachshops, die selbst Reseller sind (Ansage 02.09.2026: "auf Retailer
+# Fachshops, die selbst Reseller sind (Stefanie, 02.09.2026: "auf Retailer
 # fokussieren"). Sie bleiben als Quelle drin, weil dort gelegentlich echte
 # Ladenpreise auftauchen, melden aber nur noch Angebote BIS zur UVP. Die
 # 20-Prozent-Toleranz gilt nur fuer Retailer: bei einem Reseller ist jeder
@@ -317,7 +368,7 @@ JUBILAEUM_WOERTER = [
 ]
 
 
-# --- Sprach-Regel (Ansage 26.08.2026) -------------------------------
+# --- Sprach-Regel (Ansage Stefanie 26.08.2026) -------------------------------
 # Japanisch ist ausdruecklich erwuenscht, genauso Deutsch und Englisch.
 # Chinesische Ware will sie NICHT: der Sammlermarkt dafuer ist hier duenn und
 # die Wiederverkaufspreise liegen deutlich unter den JP- und EN-Fassungen.
@@ -334,7 +385,7 @@ CHINESISCH_MUSTER = re.compile(
 CHINESISCH_ZEICHEN = ("简体", "繁體", "繁体")
 
 
-# --- Fremde Sammelkartenspiele (Ansage 27.08.2026: "ich will Pokemon") ---
+# --- Fremde Sammelkartenspiele (Ansage Stefanie 27.08.2026: "ich will Pokemon") ---
 # Haendler wie CardCosmos fuehren auch Yu-Gi-Oh, Lorcana und Riftbound. Die
 # rutschten bisher ueber den Neuling-Verdacht durch: ein frisch angelegtes
 # Produkt, das nach Sammelkarten aussieht, wird absichtlich auch ohne
@@ -372,7 +423,7 @@ def ist_fremdes_tcg(titel: str) -> bool:
     return bool(FREMDES_TCG_MUSTER.search(titel))
 
 
-# --- Konvolut-Sperre (Ansage 26.08.2026) ----------------------------
+# --- Konvolut-Sperre (Ansage Stefanie 26.08.2026) ----------------------------
 # Privat zusammengewuerfelte Posten sind fuer das Flippen wertlos: Zustand
 # unbekannt, Inhalt nicht pruefbar, Wiederverkauf muehsam. Sie rutschten bisher
 # durch, weil die Kategorie-Wache absichtlich JEDEN neuen Artikel einer
@@ -478,6 +529,9 @@ def price_cap(title: str) -> float:
     Ohne diese Kopplung rutschte die Erste-Partner-Kollektion (UVP 17,99) mit
     59,99 Euro durch, weil die generische Grenze fuer "Kollektion" 60 Euro war.
     """
+    z = ziel_treffer(title)
+    if z:
+        return round(z["uvp"] * 1.02, 2)
     try:
         import marktwert
         uvp = marktwert.uvp_ref(title)
@@ -619,6 +673,7 @@ SOURCES = [
             "https://www.mediamarkt.de/de/search.html?query=pokemon%20prismatic",
             "https://www.mediamarkt.de/de/search.html?query=pokemon%20erhabene%20helden",
             "https://www.mediamarkt.de/de/search.html?query=pokemon%20karten",
+            "https://www.mediamarkt.de/de/search.html?query=ps5%20pro",   # Zielprodukt
         ],
         "parser": "jsonld",
         "base": "https://www.mediamarkt.de",
@@ -629,6 +684,7 @@ SOURCES = [
             "https://www.saturn.de/de/search.html?query=pokemon%2030%20jahre",
             "https://www.saturn.de/de/search.html?query=pokemon%20prismatic",
             "https://www.saturn.de/de/search.html?query=pokemon%20karten",
+            "https://www.saturn.de/de/search.html?query=ps5%20pro",   # Zielprodukt
         ],
         "parser": "jsonld",
         "base": "https://www.saturn.de",
@@ -652,6 +708,7 @@ SOURCES = [
             "https://www.mediamarkt.at/de/search.html?query=pokemon%20karten",
             "https://www.mediamarkt.at/de/search.html?query=pokemon%2030%20jahre",
             "https://www.mediamarkt.at/de/search.html?query=pokemon%20top-trainer-box",
+            "https://www.mediamarkt.at/de/search.html?query=ps5%20pro",   # Zielprodukt
         ],
         "parser": "jsonld",
         "browser": True,
@@ -669,6 +726,7 @@ SOURCES = [
             "https://www.smythstoys.com/at/de-at/search?text=pokemon%20top%20trainer%20box",
             "https://www.smythstoys.com/at/de-at/search?text=pokemon%2030%20jahre",
             "https://www.smythstoys.com/at/de-at/search?text=pokemon%20karten%20kollektion",
+            "https://www.smythstoys.com/at/de-at/search?text=ps5%20pro",
         ],
         "parser": "smyths",
         "browser": True,
@@ -687,6 +745,7 @@ SOURCES = [
             "https://geizhals.at/?fs=pokemon+top-trainer-box&in=",
             "https://geizhals.at/?fs=pokemon+30+jahre&in=",
             "https://geizhals.at/?fs=pokemon+ultra+premium&in=",
+            "https://geizhals.at/?fs=ps5+pro&in=",
         ],
         "parser": "geizhals",
         "browser": True,
@@ -898,6 +957,7 @@ SOURCES = [
             "https://www.amazon.de/s?k=pokemon+erhabene+helden",
             "https://www.amazon.de/s?k=pokemon+prismatic+evolutions",
             "https://www.amazon.de/s?k=pokemon+karten+japanisch",
+            "https://www.amazon.de/s?k=ps5+pro+konsole",   # Zielprodukt
         ],
         "item": "a.a-link-normal.s-link-style.a-text-normal",
         "base": "https://www.amazon.de",
@@ -1041,6 +1101,9 @@ def is_relevant(title: str, src: dict = None) -> bool:
     # Artikel unabhaengig vom Namen meldet.
     if ist_konvolut(title):
         return False
+    # Zielprodukte ausserhalb Pokemon (PS5 Pro): eigener Pfad, keine TCG-Regeln.
+    if ziel_treffer(title):
+        return True
     # Fremdes Sammelkartenspiel namentlich im Titel: raus, egal ueber welchen
     # Pfad der Treffer kaeme (Ansage 27.08.2026).
     if ist_fremdes_tcg(title):
@@ -1069,6 +1132,8 @@ def is_relevant(title: str, src: dict = None) -> bool:
 
 
 def is_prio(title: str) -> bool:
+    if ziel_treffer(title):
+        return True
     t = title.lower()
     return any(p in t for p in PRIO)
 
@@ -1204,6 +1269,14 @@ def check_jsonld(src: dict) -> list:
                         continue          # Einzelbooster
                     verfuegbar = str(angebot.get("availability", "")).lower()
                     status = "wartet" if "outofstock" in verfuegbar else ""
+                    # Die Suchseite von MediaMarkt/Saturn traegt bei Konsolen
+                    # keine availability (gemessen 02.09.2026). Bei Ziel-
+                    # produkten dann ehrlich "unklar" statt still "kaufbar".
+                    if not verfuegbar and ziel_treffer(titel):
+                        # Zielprodukte sind selten und teuer: da lohnt der
+                        # Blick auf die Produktseite, die den Status traegt.
+                        seite = fetch(link, src["name"])
+                        status = _status_aus_produktseite(seite) if seite else "unklar"
                     if sonderfall(titel):
                         status = ""      # Raffle immer melden
                     hits.append((titel[:180], link, preis, status))
@@ -1257,6 +1330,17 @@ def _status_aus_produktseite(html: str) -> str:
                 return "vorbestellbar"
             if "instock" in verf:
                 return ""
+    # Rueckfall: MediaMarkt verschachtelt das Product-JSON-LD so, dass der
+    # Weg oben leer bleibt (gemessen 02.09.2026 an der PS5-Pro-Seite, die
+    # dreimal "InStock" traegt). Dann reicht der rohe Text.
+    m = re.search(r'"availability"\s*:\s*"[^"]*?(OutOfStock|SoldOut|PreOrder|InStock|BackOrder)', html)
+    if m:
+        w = m.group(1).lower()
+        if w in ("outofstock", "soldout", "backorder"):
+            return "wartet"
+        if w == "preorder":
+            return "vorbestellbar"
+        return ""
     return "unklar"
 
 
@@ -1435,7 +1519,7 @@ def check_shopify(src: dict) -> list:
             # Zweite Huerde, auf ALLEN Wegen: nur versiegelte Ware. Ohne sie
             # kam ueber den Nebenfeld-Weg der komplette Einzelkarten-Bestand
             # herein, inklusive "Virizion - EN - 97/101 - PSA Slab - 9 Mint".
-            if not ist_versiegelt(tl) and not sonderfall(tl):
+            if not ist_versiegelt(tl) and not sonderfall(tl) and not ziel_treffer(tl):
                 continue
             # Ein Neuling ohne jeden Pokemon-Hinweis ist nur ein Verdacht, kein
             # sicherer Treffer. Ihn trotzdem zu melden ist richtig: lieber ein
@@ -1679,11 +1763,15 @@ def main() -> int:
             elif status == "unklar":
                 tag += " · Lagerstatus ungeprüft"
             wert = ""
-            try:
-                import marktwert
-                wert = marktwert.bewertung(title, price) + "\n"
-            except Exception as e:
-                print(f"[Marktwert] übersprungen: {e}")
+            z = ziel_treffer(title)
+            if z:
+                wert = ziel_bewertung(z, price) + "\n"
+            else:
+                try:
+                    import marktwert
+                    wert = marktwert.bewertung(title, price) + "\n"
+                except Exception as e:
+                    print(f"[Marktwert] übersprungen: {e}")
             nummer += 1
             marke = ""
             if nummer <= MAX_BEWERTBAR:

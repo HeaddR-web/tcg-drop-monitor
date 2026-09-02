@@ -84,3 +84,7 @@ Zubehoer mit Set-Namen im Titel (Acrylboxen, Protektoren) faengt `ZUBEHOER_TELLS
 
 **Reseller nur bis UVP:** Fachshops, die selbst Reseller sind, stehen in `RESELLER_QUELLEN`. Sie melden nur noch Angebote bis exakt UVP und nur mit erkanntem Preis. Die 20-Prozent-Toleranz (`UVP_TOLERANZ`) gilt nur fuer Retailer: bei einem Reseller ist jeder Cent ueber UVP schon dessen Marge.
 
+## Zielprodukte ausserhalb Pokemon (seit 02.09.2026)
+
+`ZIELPRODUKTE` in monitor.py nimmt Ware auf, die im Handel unter dem Zweitmarkt liegt, egal welches Hobby (erster Eintrag: PS5 Pro, UVP 899,99). Jeder Eintrag traegt Pflicht-Stichwoerter, Ausschluesse (Controller, Staender, Spiele), UVP und einen von Hand gepflegten Marktwert mit Quelle und Datum. Zielprodukte umgehen die Pokemon-Pruefungen, zaehlen als Prio und werden nur bis UVP plus 2 Prozent gemeldet. Die Suche haengt als zusaetzliche URL an den Retailern; bei jsonld-Quellen wird fuer den Lagerstatus die Produktseite nachgeladen, weil die Suchseite bei Konsolen keine Verfuegbarkeit traegt.
+
