@@ -74,7 +74,7 @@ ZIELLISTE = [
 ]
 
 # ZIELSETS (seit 02.09.2026): die laufenden Sets stehen in zielsets.txt, einer
-# Datei, die Stefanie selbst pflegt. Anlass: am 23.08. flogen Prismatic, Erhabene
+# Datei, die von Hand gepflegt wird. Anlass: am 23.08. flogen Prismatic, Erhabene
 # Helden und Co. als "Rauschquelle" aus dem Code, und eine Woche spaeter ging die
 # Mega-Entwicklung-Top-Trainer-Box bei MediaMarkt Oesterreich (60 Euro, Markt
 # 120) ungemeldet durch. Die Ansage dazu: ALLE laufenden Sets sind gewollt, nicht
@@ -185,7 +185,7 @@ PRICE_RE = re.compile(r"(\d{1,4})[.,](\d{2})\s*€|€\s*(\d{1,4})[.,](\d{2})")
 
 UVP_TOLERANZ = 1.20     # bis 20 Prozent ueber UVP gilt noch als Retail
 
-# Fachshops, die selbst Reseller sind (Stefanie, 02.09.2026: "auf Retailer
+# Fachshops, die selbst Reseller sind (Ansage 02.09.2026: "auf Retailer
 # fokussieren"). Sie bleiben als Quelle drin, weil dort gelegentlich echte
 # Ladenpreise auftauchen, melden aber nur noch Angebote BIS zur UVP. Die
 # 20-Prozent-Toleranz gilt nur fuer Retailer: bei einem Reseller ist jeder
@@ -368,7 +368,7 @@ JUBILAEUM_WOERTER = [
 ]
 
 
-# --- Sprach-Regel (Ansage Stefanie 26.08.2026) -------------------------------
+# --- Sprach-Regel (Ansage 26.08.2026) -------------------------------
 # Japanisch ist ausdruecklich erwuenscht, genauso Deutsch und Englisch.
 # Chinesische Ware will sie NICHT: der Sammlermarkt dafuer ist hier duenn und
 # die Wiederverkaufspreise liegen deutlich unter den JP- und EN-Fassungen.
@@ -385,7 +385,7 @@ CHINESISCH_MUSTER = re.compile(
 CHINESISCH_ZEICHEN = ("简体", "繁體", "繁体")
 
 
-# --- Fremde Sammelkartenspiele (Ansage Stefanie 27.08.2026: "ich will Pokemon") ---
+# --- Fremde Sammelkartenspiele (Ansage 27.08.2026: "ich will Pokemon") ---
 # Haendler wie CardCosmos fuehren auch Yu-Gi-Oh, Lorcana und Riftbound. Die
 # rutschten bisher ueber den Neuling-Verdacht durch: ein frisch angelegtes
 # Produkt, das nach Sammelkarten aussieht, wird absichtlich auch ohne
@@ -423,7 +423,7 @@ def ist_fremdes_tcg(titel: str) -> bool:
     return bool(FREMDES_TCG_MUSTER.search(titel))
 
 
-# --- Konvolut-Sperre (Ansage Stefanie 26.08.2026) ----------------------------
+# --- Konvolut-Sperre (Ansage 26.08.2026) ----------------------------
 # Privat zusammengewuerfelte Posten sind fuer das Flippen wertlos: Zustand
 # unbekannt, Inhalt nicht pruefbar, Wiederverkauf muehsam. Sie rutschten bisher
 # durch, weil die Kategorie-Wache absichtlich JEDEN neuen Artikel einer
