@@ -96,14 +96,16 @@ echo "$NOW" > "$HB"
 
 echo "=== $(date '+%F %H:%M') Lauf gestartet ===" >> "$DATA/monitor.log"
 
-# 1) Pokemon-Monitor, aber NUR die drei Haendler, die Cloud-IPs blocken.
+# 1) Pokemon-Monitor, aber NUR die Haendler, die Cloud-IPs blocken.
+#    MediaMarkt AT (seit 02.09.2026) braucht sogar einen echten Browser
+#    (Scrapling unter ~/.local/bin), den gibt es nur hier auf dem Mac.
 #    Seit 01.09.2026 laeuft der Rest wieder auf GitHub, dort im oeffentlichen
 #    Repo HeaddR-web/tcg-drop-monitor mit unbegrenzten Actions-Minuten.
 #    WICHTIG: die Liste hier und SOURCES_EXCLUDE in .github/workflows/monitor.yml
 #    muessen sich exakt ergaenzen. Ueberschneiden sie sich, kommt jeder Treffer
 #    doppelt, weil beide Seiten ein eigenes Gedaechtnis haben.
 STATE_FILE="$DATA/state_local.json" \
-SOURCES_ONLY="Amazon.de,MediaMarkt,Saturn,Games Island" \
+SOURCES_ONLY="Amazon.de,MediaMarkt,Saturn,Games Island,MediaMarkt AT" \
   "$PY" "$REPO/monitor.py" >> "$DATA/monitor.log" 2>&1
 
 # 2) Drop-Radar: laeuft seit 01.09.2026 in der Cloud (drops.yml, stuendlich).

@@ -52,6 +52,10 @@ PRIO_BRANDS = [
     "erste partner", "first partner", "illustrations-kollektion",
     "prismatic", "erhabene helden", "fatale flammen",
 ]
+# Seit 02.09.2026 kommen die laufenden Sets aus zielsets.txt (eine Datei fuer
+# Monitor und Drop-Radar, von Hand gepflegt).
+from zielsets import lade_zielsets
+PRIO_BRANDS += [z for z in lade_zielsets() if z not in PRIO_BRANDS]
 
 # Ausschluss: Standard-Sortiment-Rauschen
 # Zubehoer und Kleinkram, der nie ein Drop ist. Bis 26.08.2026 standen hier
@@ -529,6 +533,12 @@ def assess(title: str, price: float, category: str):
         if "ultra premium" in t or "upc" in t:
             signals.append("Ultra Premium (Top-Sammlerstück)")
             hold, margin, verdict = "1-3 J", "+30-120%", "HOLD"
+        if any(s in t for s in ("top-trainer", "top trainer", "elite trainer", "etb")):
+            # Kalibrierpunkt 02.09.2026: Mega-Entwicklung-ETB bei
+            # MediaMarkt AT 60 Euro, Sekundaermarkt 120. Zum Retail-Preis ist
+            # eine ETB eines laufenden Sets ein Sofort-Flip, kein Pruef-Fall.
+            signals.append("Top-Trainer-Box zum Retail (Kalibrierpunkt: 60 → 120)")
+            hold, margin, verdict = "Tage bis Wochen", "+50-100%", "SOFORT-FLIP"
         if "1st edition" in t or "1. edition" in t or "erstauflage" in t:
             signals.append("Erstauflage")
         if any(s in t for s in STORY) or "30 jahre" in t or "30th" in t:

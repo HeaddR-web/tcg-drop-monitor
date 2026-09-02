@@ -1,0 +1,79 @@
+# ZIELSETS: welche Pokemon-Sets und Produktlinien der Monitor melden soll.
+#
+# Eine Zeile = ein Suchwort. Gross-/Kleinschreibung egal, Treffer gilt, wenn das
+# Wort irgendwo im Produkttitel steht. Alles hinter # ist Kommentar.
+# Diese Datei wird von Hand gepflegt, ohne Python anzufassen.
+# Sie wird von monitor.py (Stichwoerter + Pokemon-Erkennung) und drops.py
+# (Immer-melden-Liste) gelesen.
+#
+# Anlass 02.09.2026: Der Monitor war seit 23.08. nur auf "30 Jahre" eingeschossen.
+# Die Mega-Entwicklung-Top-Trainer-Box bei MediaMarkt Oesterreich (60 Euro, geht
+# fuer 120) ist deshalb durchgerutscht. Ansage: Prismatic, Erhabene Helden und
+# die laufenden Sets sind ALLE gewollt, nicht nur das Jubilaeum.
+
+# --- Jubilaeum (16.09.2026) ---
+30 jahre
+30-jahre
+30th celebration
+30th anniversary
+anniversary collection
+jubilaeum
+jubiläum
+erste partner
+first partner
+partner illustration
+illustrations-kollektion
+illustration collection
+30周年
+
+# --- Mega-Entwicklung-Serie (deutsch / englisch), Release-Kalender 2026 ---
+mega-entwicklung
+mega entwicklung
+mega evolution
+delta-herrschaft          # 06.11.2026, Delta Reign
+delta herrschaft
+delta reign
+dunkelnacht               # 17.07.2026, Pitch Black
+pitch black
+wachsendes chaos          # 22.05.2026, Chaos Rising
+chaos rising
+optimale ordnung          # 27.03.2026, Perfect Order
+perfect order
+erhabene helden           # 30.01.2026, Ascended Heroes
+ascended heroes
+fatale flammen            # 14.11.2025, Phantasmal Flames
+phantasmal flames
+
+# --- Karmesin & Purpur, die Sets mit Sekundaermarkt ---
+prismatic                 # Prismatische Entwicklungen / Prismatic Evolutions
+prismatische entwicklungen
+ewige rivalen             # Destined Rivals
+destined rivals
+reisegefährten            # Journey Together
+reisegefaehrten
+journey together
+schwarze blitze           # Black Bolt
+weiße flammen             # White Flare
+weisse flammen
+black bolt
+white flare
+stürmische funken         # Surging Sparks
+surging sparks
+151                       # Karmesin & Purpur 151
+
+# --- Japanische Sets (JP-Importe ausdruecklich erwuenscht, Ansage 26.08.2026) ---
+mega brave
+mega symphonia
+munikis zero
+nihil zero
+ninja spinner
+abyss eye
+storm emerald
+terastal
+
+# --- Produktlinien, die unabhaengig vom Set laufen ---
+ultra premium
+ultra-premium
+top-trainer-box
+top trainer box
+elite trainer box

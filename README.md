@@ -66,3 +66,10 @@ selbst zurück in die Meldung.
 ## Lizenz
 
 Keine. Alle Rechte vorbehalten, bis hier eine Lizenzdatei liegt.
+
+## Zielsets (seit 02.09.2026)
+
+Welche Sets gemeldet werden, steht in `zielsets.txt`: eine Zeile je Suchwort, von Hand gepflegt, gelesen von `monitor.py` (Stichwoerter und Pokemon-Erkennung) und `drops.py` (Immer-melden-Liste). Jubilaeumsware traegt weiter die Marke `30 JAHRE`, steht aber nicht mehr pauschal ueber allem. Top-Trainer-Boxen laufender Sets zum Retail-Preis gelten als Sofort-Flip. Einzelne Booster-Packs (unter 8 Euro) werden nie gemeldet.
+
+`MediaMarkt AT` weist Skripte ab und laeuft deshalb nur lokal ueber einen echten Browser (Scrapling, `fetch_browser()`). In der Cloud ist die Quelle per `SOURCES_EXCLUDE` ausgeschlossen.
+

@@ -73,15 +73,20 @@ ZIELLISTE = [
     "tech-sticker", "mini-tin", "day & night", "tag & nacht",
 ]
 
-# Der frueher hier eingehaengte TEST_KEYWORDS-Block (laufende Sets wie Prismatic,
-# Erhabene Helden, japanische Importe) ist raus. Er war als Probe der Alert-Kette
-# bis Anfang September gedacht und passt nicht mehr zur Ansage "Prio auf 30 Jahre":
-# er hat den Grossteil der Meldungen erzeugt. Gesucht wird jetzt nur noch die
-# Jubilaeums-Linie plus die namentliche Zielliste.
-KEYWORDS = KEYWORDS + ZIELLISTE
+# ZIELSETS (seit 02.09.2026): die laufenden Sets stehen in zielsets.txt, einer
+# Datei, die von Hand gepflegt wird. Anlass: am 23.08. flogen Prismatic, Erhabene
+# Helden und Co. als "Rauschquelle" aus dem Code, und eine Woche spaeter ging die
+# Mega-Entwicklung-Top-Trainer-Box bei MediaMarkt Oesterreich (60 Euro, Markt
+# 120) ungemeldet durch. Die Ansage dazu: ALLE laufenden Sets sind gewollt, nicht
+# nur das Jubilaeum. Eine Textdatei kann bei keinem Refactoring "versehentlich"
+# leer werden, und sie zeigt auf einen Blick, was der Monitor ueberhaupt sucht.
+from zielsets import lade_zielsets
+ZIELSETS = lade_zielsets()
+KEYWORDS = KEYWORDS + ZIELLISTE + [z for z in ZIELSETS if z not in KEYWORDS]
 
 # Produkte, die uns besonders interessieren (Prio-Markierung im Alert)
-PRIO = ["ultra-premium", "ultra premium", "upc", "top-trainer", "top trainer", "ttb"]
+PRIO = ["ultra-premium", "ultra premium", "upc", "top-trainer", "top trainer", "ttb",
+        "elite trainer", "etb", "display"]   # ETB seit 02.09.2026 (60 -> 120 gemessen)
 
 # Zubehoer/Einzelkram, der nie gemeldet werden soll
 # Zwei Stufen, und der Unterschied ist wichtig.
@@ -160,6 +165,9 @@ POKEMON_WOERTER = [
     "30 jahre", "30th celebration", "erste partner", "first partner",
     "nihil zero", "storm emerald", "abyss eye", "terastal", "mega evolution",
 ]
+# Set-Namen aus zielsets.txt gelten ebenfalls als Pokemon-Beleg ("Delta-Herrschaft
+# Booster" nennt kein Pokemon beim Namen). "151" bleibt draussen, zu kurz.
+POKEMON_WOERTER += [z for z in ZIELSETS if z not in POKEMON_WOERTER and len(z) > 3]
 
 
 # Wie lange ein frisch angelegtes Produkt als "Neuling" gilt.
@@ -383,6 +391,8 @@ def ist_versiegelt(titel: str) -> bool:
     t = titel.lower()
     if any(x in t for x in EINZELKARTEN_TELLS) or KARTENNUMMER_RE.search(t):
         return False
+    if any(x in t for x in EINZEL_BOOSTER_TELLS):
+        return False
     return any(h in t for h in TCG_HINWEISE)
 
 
@@ -394,6 +404,12 @@ EINZELKARTEN_TELLS = [
     "vollbild", "full art", "alt art", "secret rare",
 ]
 KARTENNUMMER_RE = re.compile(r"\b\d{1,3}\s*/\s*\d{2,3}\b")
+
+# Einzelne Booster-Packs (5,99 Euro) sind keine Flip-Ware. MediaMarkt AT listet
+# sie als "(1x Booster Pack)", andere Shops ohne jeden Hinweis im Namen, dann
+# faengt sie nur der Preis: unter MIN_PREIS ist es ein Einzelbooster (02.09.2026).
+EINZEL_BOOSTER_TELLS = ["1x booster", "(1x", "1 x booster", "einzelbooster", "einzel-booster", "einzelpack"]
+MIN_PREIS = 8.0
 
 
 def ist_raffle(title: str) -> bool:
@@ -573,6 +589,30 @@ SOURCES = [
         ],
         "parser": "jsonld",
         "base": "https://www.saturn.de",
+    },
+    # --- OESTERREICH (seit 02.09.2026) -------------------------------------
+    # Anlass: Mega-Entwicklung-Top-Trainer-Box bei MediaMarkt AT fuer 60 Euro,
+    # Markt 120, und kein einziger .at-Shop stand in der Liste. Der Kauf laeuft
+    # online mit Versand nach Deutschland.
+    # Geprueft und NICHT aufgenommen (02.09.2026): Mueller AT (mueller.at fuehrt
+    # online nur Huellen, Alben und Deckboxen, keine versiegelte Ware, und nach
+    # drei Abrufen kommt eine JavaScript-Sperre), Libro, Thalia AT, Gameware AT
+    # (alle drei 403 fuer Skripte, Sortiment ungeprueft).
+    {
+        # MediaMarkt AT weist requests und curl mit 403 ab (gemessen 02.09.2026),
+        # laesst aber einen echten Browser durch. Deshalb "browser": True, und
+        # damit nur auf dem Mac (SOURCES_ONLY in scripts/local-monitor.sh), in
+        # der Cloud ausgeschlossen (SOURCES_EXCLUDE in monitor.yml).
+        # Saturn AT gibt es nicht mehr, saturn.at leitet auf mediamarkt.at um.
+        "name": "MediaMarkt AT",
+        "urls": [
+            "https://www.mediamarkt.at/de/search.html?query=pokemon%20karten",
+            "https://www.mediamarkt.at/de/search.html?query=pokemon%2030%20jahre",
+            "https://www.mediamarkt.at/de/search.html?query=pokemon%20top-trainer-box",
+        ],
+        "parser": "jsonld",
+        "browser": True,
+        "base": "https://www.mediamarkt.at",
     },
     # --- KATEGORIE-WACHE ------------------------------------------------------
     # Diese Quellen ueberwachen die KOMPLETTE Pokemon-Kategorie des Shops und
@@ -1004,13 +1044,51 @@ def fetch(url: str, name: str) -> str:
     return ""
 
 
+SCRAPLING = os.path.expanduser("~/.local/bin/scrapling")
+
+
+def fetch_browser(url: str, name: str) -> str:
+    """Holt eine Seite ueber einen echten Browser (Scrapling, stealthy-fetch).
+
+    Fuer Shops, die requests UND curl mit 403 abweisen, aber einen echten
+    Browser durchlassen: MediaMarkt Oesterreich (gemessen 02.09.2026, die .de-
+    Seite antwortet normal). Laeuft nur auf dem Mac, nie in der Cloud, und ist
+    mit 10 bis 30 Sekunden je Seite deutlich langsamer als fetch()."""
+    import subprocess
+    import tempfile
+    if not os.path.exists(SCRAPLING):
+        print(f"[{name}] Scrapling fehlt ({SCRAPLING}), Quelle uebersprungen")
+        return ""
+    with tempfile.TemporaryDirectory() as d:
+        ziel = os.path.join(d, "seite.html")
+        try:
+            p = subprocess.run(
+                [SCRAPLING, "extract", "stealthy-fetch", url, ziel,
+                 "--disable-resources", "--network-idle", "--timeout", "60000"],
+                capture_output=True, text=True, timeout=150,
+            )
+        except Exception as e:
+            print(f"[{name}] Browser-Abruf fehlgeschlagen: {e}")
+            return ""
+        if os.path.exists(ziel):
+            with open(ziel, encoding="utf-8", errors="replace") as f:
+                html = f.read()
+            if html:
+                return html
+        print(f"[{name}] Browser-Abruf leer: {(p.stderr or p.stdout)[-300:].strip()}")
+    return ""
+
+
 def check_jsonld(src: dict) -> list:
     """Parser fuer Shops, die ihre Trefferliste als schema.org-Daten ausliefern
     (JSON-LD ItemList). Damit sind Ketten erreichbar, deren HTML per JavaScript
     gebaut wird und die sonst blockiert waeren, z.B. MediaMarkt und Saturn."""
     hits = []
     for url in src["urls"]:
-        html = fetch(url, src["name"])
+        if src.get("browser"):
+            html = fetch_browser(url, src["name"])
+        else:
+            html = fetch(url, src["name"])
         if not html:
             continue
         soup = BeautifulSoup(html, "html.parser")
@@ -1020,8 +1098,17 @@ def check_jsonld(src: dict) -> list:
             except Exception:
                 continue
             for eintrag in (data if isinstance(data, list) else [data]):
+                if not isinstance(eintrag, dict):
+                    continue
                 for item in (eintrag.get("itemListElement") or []):
+                    # Brotkrumen-Listen (BreadcrumbList) tragen als "item" nur
+                    # eine URL-Zeichenkette. Mueller AT liefert so eine, und
+                    # ohne diese Pruefung stirbt der Parser daran (02.09.2026).
+                    if not isinstance(item, dict):
+                        continue
                     prod = item.get("item") or {}
+                    if not isinstance(prod, dict):
+                        continue
                     titel = " ".join(str(prod.get("name", "")).split())
                     link = prod.get("url") or ""
                     if not titel or not link or not is_relevant(titel, src):
@@ -1035,13 +1122,24 @@ def check_jsonld(src: dict) -> list:
                         preis = 0.0
                     if preis and preis > price_cap(titel) and not sonderfall(titel):
                         continue
+                    if preis and preis < MIN_PREIS:
+                        continue          # Einzelbooster
                     verfuegbar = str(angebot.get("availability", "")).lower()
                     status = "wartet" if "outofstock" in verfuegbar else ""
                     if sonderfall(titel):
                         status = ""      # Raffle immer melden
                     hits.append((titel[:180], link, preis, status))
         time.sleep(1)
-    return hits
+    # Dieselbe Ware taucht auf mehreren Suchseiten auf ("pokemon karten" und
+    # "pokemon top-trainer-box" liefern beide die ETB). Ohne diese Stelle stand
+    # sie im Testlauf am 02.09.2026 zweimal in einer Meldung.
+    gesehen, eindeutig = set(), []
+    for h in hits:
+        if h[1] in gesehen:
+            continue
+        gesehen.add(h[1])
+        eindeutig.append(h)
+    return eindeutig
 
 
 def check_shopify(src: dict) -> list:
@@ -1206,6 +1304,8 @@ def check_source(src: dict) -> list:
             if price and price > price_cap(title):
                 too_expensive += 1
                 continue
+            if price and price < MIN_PREIS:
+                continue          # Einzelbooster
             if not price and src.get("require_price"):
                 continue
             hits.append((title[:180], href, price, status))
@@ -1290,11 +1390,11 @@ def main() -> int:
         # Prio-Treffer zuerst
         # Raffles und Live-Drops ganz nach oben: die laufen nach Stunden ab,
         # alles andere kann warten.
-        # PRIORITAET 30 JAHRE (Ansage 23.08.2026): Jubilaeumsware steht immer
-        # oben, egal was sonst passiert. Innerhalb der 30-Jahre-Ware gilt
-        # weiter: Raffles und Live-Drops zuerst (laufen nach Stunden ab).
+        # Seit 02.09.2026 steht Jubilaeumsware NICHT mehr pauschal ueber allem:
+        # eine Mega-Entwicklung-ETB zum Retail-Preis ist genauso Geld wie eine
+        # 30-Jahre-Tin. Das 🎂-Zeichen bleibt als Hinweis, sortiert wird nach
+        # Dringlichkeit (Raffle, Restock, Neuling) und Produktwert (Prio).
         new_items.sort(key=lambda x: (
-            not ist_jubilaeum(x[1]),
             not sonderfall(x[1]),
             x[4] not in ("neuling", "verdacht", "restock"),
             not is_prio(x[1]),
@@ -1313,19 +1413,13 @@ def main() -> int:
                 f'<a href="{escape(cm, quote=True)}">Cardmarket</a>'
             )
 
-        lines = ["<b>Pokémon 30 Jahre – neue Treffer</b>", ""]
+        lines = ["<b>Pokémon – neue Treffer</b>", ""]
         # Bewertungs-Knoepfe: hoechstens fuer die ersten acht Treffer, sonst
         # wird die Tastatur unter der Nachricht laenger als die Nachricht.
         knoepfe = []
         gemeldet = lade_gemeldet()
         nummer = 0
-        # Sichtbare Trennung: was nicht zur 30-Jahre-Linie gehoert, steht
-        # unter einem eigenen Strich. Oben nur das, worauf es ankommt.
-        trenner_gesetzt = False
         for shop, title, url, price, status, _fp in new_items:
-            if not ist_jubilaeum(title) and not trenner_gesetzt:
-                lines.append("———— sonstige Pokémon-Treffer ————\n")
-                trenner_gesetzt = True
             flag = "🎂 30 JAHRE · " if ist_jubilaeum(title) else ""
             if is_prio(title):
                 flag += "🔥 "
