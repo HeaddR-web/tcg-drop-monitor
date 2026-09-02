@@ -73,3 +73,14 @@ Welche Sets gemeldet werden, steht in `zielsets.txt`: eine Zeile je Suchwort, vo
 
 `MediaMarkt AT` weist Skripte ab und laeuft deshalb nur lokal ueber einen echten Browser (Scrapling, `fetch_browser()`). In der Cloud ist die Quelle per `SOURCES_EXCLUDE` ausgeschlossen.
 
+## Oesterreich-Quellen und Reseller-Regel (seit 02.09.2026)
+
+Zwei weitere Quellen laufen nur lokal ueber den Browser-Weg (`parser: smyths` und `parser: geizhals`, in der Cloud per `SOURCES_EXCLUDE` ausgeschlossen):
+
+- **Smyths Toys AT**: drei Suchseiten, danach fuer bis zu 10 Treffer die Produktseite, weil nur dort im JSON-LD der Lagerstatus steht. Prio-Ware (Top-Trainer-Box, Ultra-Premium, Display) und bekannte Warteposten kommen zuerst dran. Liefert der Shop zwei Fehlseiten in Folge (am 02.09. waren es 162-Byte-502-Huellen), bricht der Abruf ab und die Treffer gehen mit "Lagerstatus ungeprueft" raus.
+- **Geizhals.at**: Preisvergleich als Sammelquelle fuer Haendler, die selbst Bots sperren (Pagro, Libro). Preis ist das guenstigste Angebot, "keine Angebote" gilt als wartet.
+
+Zubehoer mit Set-Namen im Titel (Acrylboxen, Protektoren) faengt `ZUBEHOER_TELLS` ab.
+
+**Reseller nur bis UVP:** Fachshops, die selbst Reseller sind, stehen in `RESELLER_QUELLEN`. Sie melden nur noch Angebote bis exakt UVP und nur mit erkanntem Preis. Die 20-Prozent-Toleranz (`UVP_TOLERANZ`) gilt nur fuer Retailer: bei einem Reseller ist jeder Cent ueber UVP schon dessen Marge.
+

@@ -105,7 +105,7 @@ echo "=== $(date '+%F %H:%M') Lauf gestartet ===" >> "$DATA/monitor.log"
 #    muessen sich exakt ergaenzen. Ueberschneiden sie sich, kommt jeder Treffer
 #    doppelt, weil beide Seiten ein eigenes Gedaechtnis haben.
 STATE_FILE="$DATA/state_local.json" \
-SOURCES_ONLY="Amazon.de,MediaMarkt,Saturn,Games Island,MediaMarkt AT" \
+SOURCES_ONLY="Amazon.de,MediaMarkt,Saturn,Games Island,MediaMarkt AT,Smyths AT,Geizhals AT" \
   "$PY" "$REPO/monitor.py" >> "$DATA/monitor.log" 2>&1
 
 # 2) Drop-Radar: laeuft seit 01.09.2026 in der Cloud (drops.yml, stuendlich).

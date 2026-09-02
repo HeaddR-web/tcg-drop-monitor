@@ -134,6 +134,41 @@ PRICE_RE = re.compile(r"(\d{1,4})[.,](\d{2})\s*€|€\s*(\d{1,4})[.,](\d{2})")
 
 UVP_TOLERANZ = 1.20     # bis 20 Prozent ueber UVP gilt noch als Retail
 
+# Fachshops, die selbst Reseller sind (Ansage 02.09.2026: "auf Retailer
+# fokussieren"). Sie bleiben als Quelle drin, weil dort gelegentlich echte
+# Ladenpreise auftauchen, melden aber nur noch Angebote BIS zur UVP. Die
+# 20-Prozent-Toleranz gilt nur fuer Retailer: bei einem Reseller ist jeder
+# Cent ueber UVP schon dessen Marge, da bleibt zum Flippen nichts.
+RESELLER_QUELLEN = ("Card Corner", "Feenturm", "CardCosmos", "GeeksHeaven",
+                    "ChiefCards", "Pokitrio", "CardsForAll", "Kartenbasis",
+                    "Kofuku", "TCG-Trade")
+
+
+def ist_reseller(name: str) -> bool:
+    return name.startswith(RESELLER_QUELLEN)
+
+
+def reseller_filter(src: dict, hits: list) -> list:
+    """Wirft bei Reseller-Quellen alles ueber der reinen UVP raus."""
+    if not ist_reseller(src.get("name", "")):
+        return hits
+    behalten, raus = [], 0
+    for h in hits:
+        titel, preis = h[0], (h[2] if len(h) > 2 else None)
+        uvp_grenze = round(price_cap(titel) / UVP_TOLERANZ, 2)
+        if sonderfall(titel):
+            behalten.append(h)
+            continue
+        # Ohne Preis laesst sich UVP nicht pruefen, und ein Reseller-Treffer
+        # ohne Preis ist nur Laerm (Card Corner liefert im Listing keinen).
+        if not preis or preis > uvp_grenze:
+            raus += 1
+            continue
+        behalten.append(h)
+    if raus:
+        print(f"[{src['name']}] Reseller: {raus} Treffer ueber UVP oder ohne Preis verworfen")
+    return behalten
+
 # --- Raffles und Live-Drops --------------------------------------------------
 # Bei knapper Ware verlosen Haendler die Kaufrechte, statt sie zu verkaufen.
 # Das ist die fairste und oft einzige Chance auf Retail-Preis. Solche Angebote
@@ -393,6 +428,8 @@ def ist_versiegelt(titel: str) -> bool:
         return False
     if any(x in t for x in EINZEL_BOOSTER_TELLS):
         return False
+    if any(x in t for x in ZUBEHOER_TELLS):
+        return False
     return any(h in t for h in TCG_HINWEISE)
 
 
@@ -410,6 +447,12 @@ KARTENNUMMER_RE = re.compile(r"\b\d{1,3}\s*/\s*\d{2,3}\b")
 # faengt sie nur der Preis: unter MIN_PREIS ist es ein Einzelbooster (02.09.2026).
 EINZEL_BOOSTER_TELLS = ["1x booster", "(1x", "1 x booster", "einzelbooster", "einzel-booster", "einzelpack"]
 MIN_PREIS = 8.0
+
+# Zubehoer, das die Set-Namen im Titel traegt, aber keine Karten enthaelt.
+# Geizhals listete eine "Acrylic Box Protezione ... 151 Ultra-Premium", die
+# ueber das Stichwort "ultra premium" durchkam (Testlauf 02.09.2026).
+ZUBEHOER_TELLS = ["acrylic", "acryl", "protector", "protezione", "schutzhülle",
+                  "schutzhuelle", "sleeves", "toploader", "display case", "displaycase"]
 
 
 def ist_raffle(title: str) -> bool:
@@ -613,6 +656,41 @@ SOURCES = [
         "parser": "jsonld",
         "browser": True,
         "base": "https://www.mediamarkt.at",
+    },
+    {
+        # Smyths Toys AT (gemessen 02.09.2026): fuehrt alle aktuellen Top-Trainer-
+        # Boxen zu 54,99, also unter UVP. curl bekommt nur eine 1-KB-Huelle, der
+        # Browser die volle Seite. Die Suchseite kennt keinen Lagerstatus, den
+        # traegt erst die Produktseite als JSON-LD (InStock/OutOfStock/PreOrder).
+        # Deshalb holt der Parser je relevantem Treffer die Produktseite nach,
+        # gedeckelt auf SMYTHS_MAX_DETAILS Abrufe pro Lauf.
+        "name": "Smyths AT",
+        "urls": [
+            "https://www.smythstoys.com/at/de-at/search?text=pokemon%20top%20trainer%20box",
+            "https://www.smythstoys.com/at/de-at/search?text=pokemon%2030%20jahre",
+            "https://www.smythstoys.com/at/de-at/search?text=pokemon%20karten%20kollektion",
+        ],
+        "parser": "smyths",
+        "browser": True,
+        "base": "https://www.smythstoys.com",
+    },
+    {
+        # Geizhals.at (gemessen 02.09.2026): Preisvergleich, per Browser lesbar.
+        # Sammelquelle fuer oesterreichische Ladenpreis-Haendler, die selbst
+        # nicht lesbar sind: Pagro & Libro (Cloudflare, auch mit Loeser 403),
+        # Kaufland-Marktplatz, Amazon.at. Die Suchseite nennt je Produkt den
+        # guenstigsten Preis und die Angebotszahl. Liegt der Preis unter der
+        # UVP-Grenze, verkauft gerade ein Retailer, und genau das ist der Alarm.
+        # "keine Angebote" = wartet (Restock-Kandidat).
+        "name": "Geizhals AT",
+        "urls": [
+            "https://geizhals.at/?fs=pokemon+top-trainer-box&in=",
+            "https://geizhals.at/?fs=pokemon+30+jahre&in=",
+            "https://geizhals.at/?fs=pokemon+ultra+premium&in=",
+        ],
+        "parser": "geizhals",
+        "browser": True,
+        "base": "https://geizhals.at",
     },
     # --- KATEGORIE-WACHE ------------------------------------------------------
     # Diese Quellen ueberwachen die KOMPLETTE Pokemon-Kategorie des Shops und
@@ -1142,6 +1220,158 @@ def check_jsonld(src: dict) -> list:
     return eindeutig
 
 
+SMYTHS_MAX_DETAILS = 10  # Produktseiten je Lauf, jede kostet 15-30 s Browser
+
+
+def _preis_aus_text(text: str) -> float:
+    """Preis wie '54 ,99 €' (Smyths setzt Euro und Cent in getrennte Spans)."""
+    m = re.search(r"(\d{1,4})\s*[.,]\s*(\d{2})\s*€", text)
+    if not m:
+        m = re.search(r"€\s*(\d{1,4})\s*[.,]\s*(\d{2})", text)
+    if not m:
+        return 0.0
+    try:
+        return float(f"{m.group(1)}.{m.group(2)}")
+    except ValueError:
+        return 0.0
+
+
+def _status_aus_produktseite(html: str) -> str:
+    """Liest offers.availability aus dem JSON-LD einer Produktseite."""
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(tag.string or "{}")
+        except Exception:
+            continue
+        for eintrag in (data if isinstance(data, list) else [data]):
+            if not isinstance(eintrag, dict) or eintrag.get("@type") != "Product":
+                continue
+            angebot = eintrag.get("offers") or {}
+            if isinstance(angebot, list):
+                angebot = angebot[0] if angebot else {}
+            verf = str(angebot.get("availability", "")).lower()
+            if "outofstock" in verf or "soldout" in verf:
+                return "wartet"
+            if "preorder" in verf:
+                return "vorbestellbar"
+            if "instock" in verf:
+                return ""
+    return "unklar"
+
+
+def check_smyths(src: dict) -> list:
+    """Smyths Toys: Kacheln aus dem HTML, Lagerstatus von der Produktseite."""
+    hits, gesehen = [], set()
+    for url in src["urls"]:
+        html = fetch_browser(url, src["name"])
+        if not html:
+            continue
+        soup = BeautifulSoup(html, "html.parser")
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if "/p/" not in href or not a.find("h2"):
+                continue
+            if href.startswith("/"):
+                href = src["base"] + href
+            if href in gesehen:
+                continue
+            titel = " ".join(a.find("h2").get_text(" ", strip=True).split())
+            if not titel or not is_relevant(titel, src):
+                continue
+            gesehen.add(href)
+            preis = _preis_aus_text(a.get_text(" ", strip=True))
+            if preis and preis > price_cap(titel) and not sonderfall(titel):
+                continue
+            if preis and preis < MIN_PREIS:
+                continue
+            hits.append([titel[:180], href, preis, ""])
+        time.sleep(1)
+    # Lagerstatus nachholen: ohne ihn wuerde jede ausverkaufte Box als kaufbar
+    # gemeldet, und "wartet"-Treffer bleiben absichtlich ungespeichert, damit
+    # der Alarm beim Umschalten auf kaufbar feuert.
+    # Reihenfolge: erst Prio-Ware (ETB, UPC, Display), dann alles, was laut
+    # Gedaechtnis gerade "wartet" (Restock-Kandidaten), dann der Rest. Was
+    # ueber dem Deckel liegt, geht als "unklar" raus und wird in der Meldung
+    # so gekennzeichnet, statt still als kaufbar zu gelten.
+    try:
+        bekannt = load_state()
+    except Exception:
+        bekannt = {}
+    def rang(h):
+        if is_prio(h[0]):
+            return 0
+        if bekannt.get(fingerprint(src["name"], h[0], h[1])) == "wartet":
+            return 1
+        return 2
+    hits.sort(key=rang)
+    # Smyths AT antwortete am 02.09.2026 nachmittags auf jede Produktseite mit
+    # einer 162-Byte-502-Huelle, waehrend die Suche normal lief. Zwei solche
+    # Fehlseiten in Folge, und der Rest wird nicht mehr abgerufen: das spart
+    # fuenf Minuten Browserzeit, die Treffer gehen als "unklar" raus.
+    fehlseiten = 0
+    geprueft = 0
+    for h in hits:
+        if geprueft >= SMYTHS_MAX_DETAILS or fehlseiten >= 2:
+            h[3] = "unklar"
+            continue
+        detail = fetch_browser(h[1], src["name"])
+        geprueft += 1
+        if not detail or len(detail) < 2000 or "application/ld+json" not in detail:
+            fehlseiten += 1
+            h[3] = "unklar"
+            if fehlseiten >= 2:
+                print(f"[{src['name']}] Produktseiten liefern Fehlseiten "
+                      f"({len(detail or '')} Bytes), Lagerstatus bleibt ungeprueft")
+            continue
+        fehlseiten = 0
+        h[3] = _status_aus_produktseite(detail)
+    return [tuple(h) for h in hits]
+
+
+def check_geizhals(src: dict) -> list:
+    """Geizhals-Suchergebnis: Name, guenstigster Preis, Angebotszahl."""
+    hits, gesehen = [], set()
+    for url in src["urls"]:
+        html = fetch_browser(url, src["name"])
+        if not html:
+            continue
+        soup = BeautifulSoup(html, "html.parser")
+        for a in soup.select("a.galleryview__name-link"):
+            href = a.get("href", "")
+            titel = " ".join(a.get_text(" ", strip=True).split())
+            if not href or not titel or not is_relevant(titel, src):
+                continue
+            href = href.split("#")[0]
+            if href.startswith("/"):
+                href = src["base"] + href
+            if href in gesehen:
+                continue
+            gesehen.add(href)
+            # Kachel: das Elternelement, das Preis oder "keine Angebote" traegt
+            el = a
+            text = ""
+            for _ in range(5):
+                if el is None:
+                    break
+                t = el.get_text(" ", strip=True)
+                if "€" in t or "keine Angebote" in t:
+                    text = t
+                    break
+                el = el.parent
+            if "keine Angebote" in text:
+                hits.append((titel[:180], href, 0.0, "wartet"))
+                continue
+            preis = _preis_aus_text(text)
+            if preis and preis > price_cap(titel) and not sonderfall(titel):
+                continue          # nur Reseller-Preise, kein Retailer aktiv
+            if preis and preis < MIN_PREIS:
+                continue
+            hits.append((titel[:180], href, preis, ""))
+        time.sleep(1)
+    return hits
+
+
 def check_shopify(src: dict) -> list:
     """Shopify-Katalog als JSON statt HTML.
 
@@ -1271,11 +1501,19 @@ def check_shopify(src: dict) -> list:
 
 
 def check_source(src: dict) -> list:
+    """Gibt Liste von (titel, url, preis, status) relevanter Treffer zurueck."""
+    return reseller_filter(src, _check_source(src))
+
+
+def _check_source(src: dict) -> list:
     if src.get("parser") == "jsonld":
         return check_jsonld(src)
     if src.get("parser") == "shopify":
         return check_shopify(src)
-    """Gibt Liste von (titel, url) relevanter Treffer zurueck."""
+    if src.get("parser") == "smyths":
+        return check_smyths(src)
+    if src.get("parser") == "geizhals":
+        return check_geizhals(src)
     hits = []
     for url in src["urls"]:
         html = fetch(url, src["name"])
@@ -1438,6 +1676,8 @@ def main() -> int:
             tag = f"{price:.2f} €".replace(".", ",") if price else "Preis?"
             if status == "vorbestellbar":
                 tag += " · Vorbestellung"
+            elif status == "unklar":
+                tag += " · Lagerstatus ungeprüft"
             wert = ""
             try:
                 import marktwert
