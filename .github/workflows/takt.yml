@@ -20,9 +20,18 @@ name: Takt
 #   Schnellpass und Bewertungen: bei jedem Tick (alle 5 Min)
 #   Monitor:                     wenn die Minute in 0-4, 15-19, 30-34, 45-49 liegt
 #   Drop-Radar:                  wenn die Minute in 0-4 liegt (einmal pro Stunde)
-# Kommt ein Tick verspaetet an, kann ein Monitor-Lauf ausfallen (naechster in
-# 15 Minuten) oder doppelt angestossen werden (der zweite wartet in der
-# concurrency-Gruppe und findet nichts Neues). Beides ist verkraftbar.
+# Massgeblich ist die Minute, in der der Tick bei GitHub ankam (createdAt des
+# Laufs), nicht die Minute, in der der Runner endlich startet. Sonst wuerde ein
+# Tick um 21:00, dessen Runner erst 21:05 anlaeuft, den stuendlichen Drop-Lauf
+# ersatzlos verlieren (Befund DeepSeek 13.09.2026). Faellt die Abfrage aus,
+# gilt ersatzweise die Uhr des Runners.
+# Kommt ein Tick selbst verspaetet an, kann ein Monitor-Lauf ausfallen
+# (naechster in 15 Minuten) oder doppelt angestossen werden (der zweite wartet
+# in der concurrency-Gruppe und findet nichts Neues). Beides ist verkraftbar.
+#
+# Kann der Takt einen Workflow nicht starten, meldet er das selbst per
+# Telegram. cron-job.org sieht davon nichts: dessen Aufruf war schon mit 204
+# beantwortet, bevor dieser Lauf begann.
 #
 # Die alten schedule-Eintraege in den Workflows bleiben als Rueckfall bestehen.
 # Doppelte Starts stossen sich nicht: jeder Workflow hat eine concurrency-Gruppe,
@@ -55,9 +64,18 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -eu
-          stunde=$(TZ=Europe/Berlin date +%-H)
-          minute=$(TZ=Europe/Berlin date +%-M)
-          echo "Ortszeit Berlin: $(TZ=Europe/Berlin date '+%Y-%m-%d %H:%M')"
+          # Zeitpunkt des Ticks = Anlage dieses Laufs, nicht Start des Runners.
+          erstellt=$(gh run view "$GITHUB_RUN_ID" --json createdAt -q .createdAt || true)
+          if [ -n "$erstellt" ]; then
+            stunde=$(TZ=Europe/Berlin date -d "$erstellt" +%-H)
+            minute=$(TZ=Europe/Berlin date -d "$erstellt" +%-M)
+            echo "Tick angekommen (Berlin): $(TZ=Europe/Berlin date -d "$erstellt" '+%Y-%m-%d %H:%M:%S')"
+          else
+            stunde=$(TZ=Europe/Berlin date +%-H)
+            minute=$(TZ=Europe/Berlin date +%-M)
+            echo "createdAt nicht abrufbar, nehme Runner-Uhr."
+          fi
+          echo "Runner-Uhr (Berlin):      $(TZ=Europe/Berlin date '+%Y-%m-%d %H:%M:%S')"
 
           if [ "$stunde" -lt 7 ] || [ "$stunde" -ge 22 ]; then
             echo "Ausserhalb des Fensters 7-22 Uhr, nichts gestartet."
@@ -92,3 +110,22 @@ jobs:
           fi
 
           exit $fehler
+
+      - name: Bei Startfehler per Telegram melden
+        if: failure()
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          LAUF_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -u
+          if [ -z "$TG_BOT_TOKEN" ] || [ -z "$TG_CHAT_ID" ]; then
+            echo "Telegram-Secrets fehlen, keine Meldung moeglich." >&2
+            exit 0
+          fi
+          text="Takt konnte einen Workflow nicht starten. Log: $LAUF_URL"
+          curl -sS --max-time 20 \
+            --data-urlencode "chat_id=$TG_CHAT_ID" \
+            --data-urlencode "text=$text" \
+            "https://api.telegram.org/bot$TG_BOT_TOKEN/sendMessage" > /dev/null \
+            || echo "Telegram-Meldung fehlgeschlagen." >&2
