@@ -7,31 +7,35 @@ name: Takt
 # `gh run list`, 01. bis 12.09.). Der Schnellpass (alle 5 Min geplant) kam auf
 # 5 pro Tag. GitHub drosselt Cron-Laeufe bei Last, ohne Fehlermeldung.
 #
-# Loesung: cron-job.org ruft alle 5 Minuten die GitHub-API auf und schickt ein
-# repository_dispatch-Ereignis "tick". Dieser Workflow nimmt den Tick entgegen
-# und startet die eigentlichen Workflows per workflow_dispatch. Solche Starts
-# unterliegen NICHT der Cron-Drosselung, sie laufen innerhalb von Sekunden an.
+# Loesung: cron-job.org ruft alle 5 Minuten die GitHub-API auf und startet
+# diesen Workflow per workflow_dispatch (Endpunkt
+# /actions/workflows/takt.yml/dispatches, Token braucht nur "Actions: write",
+# kein Schreibrecht auf Dateien). Dieser Workflow startet dann die eigentlichen
+# Workflows, ebenfalls per workflow_dispatch. Solche Starts unterliegen nicht
+# der dokumentierten schedule-Verzoegerung, gemessen am 13.09.: Tick 19:54:11,
+# Schnellpass und Bewertungen um 19:54:17 in der Warteschlange.
 #
 # Der Takt selbst ist ein einziger cron-job.org-Auftrag. Welche Workflows bei
 # einem Tick starten, entscheidet die Minute:
 #   Schnellpass und Bewertungen: bei jedem Tick (alle 5 Min)
 #   Monitor:                     wenn die Minute in 0-4, 15-19, 30-34, 45-49 liegt
 #   Drop-Radar:                  wenn die Minute in 0-4 liegt (einmal pro Stunde)
-# Kommt ein Tick spaeter als 5 Minuten an, faellt hoechstens ein Monitor-Lauf
-# aus, der naechste kommt 15 Minuten spaeter. Das ist verkraftbar.
+# Kommt ein Tick verspaetet an, kann ein Monitor-Lauf ausfallen (naechster in
+# 15 Minuten) oder doppelt angestossen werden (der zweite wartet in der
+# concurrency-Gruppe und findet nichts Neues). Beides ist verkraftbar.
 #
 # Die alten schedule-Eintraege in den Workflows bleiben als Rueckfall bestehen.
 # Doppelte Starts stossen sich nicht: jeder Workflow hat eine concurrency-Gruppe,
-# der zweite Lauf wartet und findet dann nichts Neues.
+# der zweite Lauf wartet und findet dann nichts Neues. Monitor und Schnellpass
+# teilen sich EINE Gruppe, weil beide monitor.py mit state.json fahren; liefen
+# sie parallel, koennten beide denselben frischen Treffer melden.
 #
 # Zeitfenster 7 bis 22 Uhr deutscher Zeit wird hier nochmal geprueft, in echter
 # Ortszeit (Europe/Berlin, also auch nach der Zeitumstellung richtig). Wenn
 # cron-job.org versehentlich rund um die Uhr feuert, passiert nachts nichts.
 
 on:
-  repository_dispatch:
-    types: [tick]
-  workflow_dispatch:          # Handstart zum Testen
+  workflow_dispatch:          # von cron-job.org per API, oder von Hand zum Testen
 
 permissions:
   actions: write              # noetig fuer `gh workflow run`

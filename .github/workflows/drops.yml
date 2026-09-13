@@ -2,7 +2,8 @@ name: Drop-Radar
 
 on:
   schedule:
-    - cron: "17 5-19 * * *"   # stuendlich (Minute 17), 7-21 Uhr deutscher Zeit. Fenster 7-22 Uhr
+    - cron: "17 7-21 * * *"   # stuendlich (Minute 17), 7-21 Uhr Ortszeit. Fenster 7-22 Uhr
+      timezone: "Europe/Berlin"
   workflow_dispatch:
 
 permissions:
@@ -49,3 +50,4 @@ jobs:
             sleep $((RANDOM % 5 + 2))
           done
           echo "Drops-State-Push nach 5 Versuchen fehlgeschlagen" >&2
+          exit 1   # sonst steht der Lauf gruen, obwohl das Gedaechtnis fehlt und der naechste Lauf doppelt meldet

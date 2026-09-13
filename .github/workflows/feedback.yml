@@ -6,7 +6,8 @@ name: Telegram-Bewertungen abholen
 
 on:
   schedule:
-    - cron: "*/5 5-20 * * *"   # alle 5 Min, 7:00-22:55 deutscher Zeit
+    - cron: "*/5 7-22 * * *"   # alle 5 Min, 7:00-22:55 Ortszeit
+      timezone: "Europe/Berlin"
   workflow_dispatch:
 
 permissions:
@@ -46,3 +47,4 @@ jobs:
             sleep $((RANDOM % 5 + 2))
           done
           echo "Bewertungs-Push nach 5 Versuchen fehlgeschlagen" >&2
+          exit 1   # sonst steht der Lauf gruen, obwohl das Gedaechtnis fehlt und der naechste Lauf doppelt meldet

@@ -8,16 +8,18 @@ name: Raffle-Schnellpass
 
 on:
   schedule:
-    - cron: "*/5 5-19 * * *"    # alle 5 Min, 7:00-21:55 deutscher Zeit. Fenster 7-22 Uhr
+    - cron: "*/5 7-21 * * *"    # alle 5 Min, 7:00-21:55 Ortszeit. Fenster 7-22 Uhr
+      timezone: "Europe/Berlin"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  # Nie zwei Schnellpaesse gleichzeitig: sonst schreiben beide den State und
-  # es kommen Doppelmeldungen.
-  group: schnellpass
+  # Dieselbe Gruppe wie monitor.yml: beide fahren monitor.py mit state.json.
+  # Liefen sie parallel, koennten beide denselben frischen Treffer melden.
+  # Seit 13.09.2026 (Befund Codex), vorher eigene Gruppe "schnellpass".
+  group: monitor
   cancel-in-progress: false
 
 jobs:
@@ -56,3 +58,4 @@ jobs:
             sleep $((RANDOM % 5 + 2))
           done
           echo "State-Push nach 5 Versuchen fehlgeschlagen" >&2
+          exit 1   # sonst steht der Lauf gruen, obwohl das Gedaechtnis fehlt und der naechste Lauf doppelt meldet

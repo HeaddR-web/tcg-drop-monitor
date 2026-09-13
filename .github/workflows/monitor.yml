@@ -2,7 +2,8 @@ name: Pokemon 30 Jahre Monitor
 
 on:
   schedule:
-    - cron: "*/15 5-19 * * *"   # alle 15 Min, 7:00-21:45 deutscher Zeit (UTC+2). Fenster 7-22 Uhr, Ansage 26.08.2026
+    - cron: "*/15 7-21 * * *"   # alle 15 Min, 7:00-21:45 Ortszeit. Fenster 7-22 Uhr, Ansage 26.08.2026
+      timezone: "Europe/Berlin"   # seit 13.09.2026: Ortszeit statt UTC, Zeitumstellung erledigt GitHub
   workflow_dispatch:          # manueller Start ueber die Actions-Oberflaeche
 
 permissions:
@@ -52,3 +53,4 @@ jobs:
             sleep $((RANDOM % 5 + 2))
           done
           echo "State-Push nach 5 Versuchen fehlgeschlagen" >&2
+          exit 1   # sonst steht der Lauf gruen, obwohl das Gedaechtnis fehlt und der naechste Lauf doppelt meldet
