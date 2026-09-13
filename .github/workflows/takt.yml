@@ -1,0 +1,90 @@
+name: Takt
+
+# Externer Taktgeber statt GitHub-Cron.
+#
+# Anlass 13.09.2026: GitHubs eigener "schedule"-Cron lieferte im oeffentlichen
+# Repo nur 4 bis 6 Monitor-Laeufe pro Tag statt der geplanten 60 (gemessen mit
+# `gh run list`, 01. bis 12.09.). Der Schnellpass (alle 5 Min geplant) kam auf
+# 5 pro Tag. GitHub drosselt Cron-Laeufe bei Last, ohne Fehlermeldung.
+#
+# Loesung: cron-job.org ruft alle 5 Minuten die GitHub-API auf und schickt ein
+# repository_dispatch-Ereignis "tick". Dieser Workflow nimmt den Tick entgegen
+# und startet die eigentlichen Workflows per workflow_dispatch. Solche Starts
+# unterliegen NICHT der Cron-Drosselung, sie laufen innerhalb von Sekunden an.
+#
+# Der Takt selbst ist ein einziger cron-job.org-Auftrag. Welche Workflows bei
+# einem Tick starten, entscheidet die Minute:
+#   Schnellpass und Bewertungen: bei jedem Tick (alle 5 Min)
+#   Monitor:                     wenn die Minute in 0-4, 15-19, 30-34, 45-49 liegt
+#   Drop-Radar:                  wenn die Minute in 0-4 liegt (einmal pro Stunde)
+# Kommt ein Tick spaeter als 5 Minuten an, faellt hoechstens ein Monitor-Lauf
+# aus, der naechste kommt 15 Minuten spaeter. Das ist verkraftbar.
+#
+# Die alten schedule-Eintraege in den Workflows bleiben als Rueckfall bestehen.
+# Doppelte Starts stossen sich nicht: jeder Workflow hat eine concurrency-Gruppe,
+# der zweite Lauf wartet und findet dann nichts Neues.
+#
+# Zeitfenster 7 bis 22 Uhr deutscher Zeit wird hier nochmal geprueft, in echter
+# Ortszeit (Europe/Berlin, also auch nach der Zeitumstellung richtig). Wenn
+# cron-job.org versehentlich rund um die Uhr feuert, passiert nachts nichts.
+
+on:
+  repository_dispatch:
+    types: [tick]
+  workflow_dispatch:          # Handstart zum Testen
+
+permissions:
+  actions: write              # noetig fuer `gh workflow run`
+  contents: read
+
+concurrency:
+  group: takt
+  cancel-in-progress: false
+
+jobs:
+  verteilen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Workflows starten
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          stunde=$(TZ=Europe/Berlin date +%-H)
+          minute=$(TZ=Europe/Berlin date +%-M)
+          echo "Ortszeit Berlin: $(TZ=Europe/Berlin date '+%Y-%m-%d %H:%M')"
+
+          if [ "$stunde" -lt 7 ] || [ "$stunde" -ge 22 ]; then
+            echo "Ausserhalb des Fensters 7-22 Uhr, nichts gestartet."
+            exit 0
+          fi
+
+          starten() {
+            # Fehler beim Start nicht verschlucken, aber die anderen Workflows
+            # trotzdem noch anstossen.
+            if gh workflow run "$1"; then
+              echo "gestartet: $1"
+            else
+              echo "START FEHLGESCHLAGEN: $1" >&2
+              fehler=1
+            fi
+          }
+          fehler=0
+
+          starten schnellpass.yml
+          starten feedback.yml
+
+          if [ $((minute % 15)) -lt 5 ]; then
+            starten monitor.yml
+          else
+            echo "Monitor nicht faellig (Minute $minute)"
+          fi
+
+          if [ "$minute" -lt 5 ]; then
+            starten drops.yml
+          else
+            echo "Drop-Radar nicht faellig (Minute $minute)"
+          fi
+
+          exit $fehler

@@ -8,6 +8,12 @@ on:
 permissions:
   contents: write             # noetig, damit state.json zurueckgeschrieben wird
 
+concurrency:
+  # Nie zwei Laeufe gleichzeitig: seit dem Takt (takt.yml) koennen Cron-
+  # Rueckfall und externer Tick nah beieinander starten. Der zweite wartet.
+  group: monitor
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
