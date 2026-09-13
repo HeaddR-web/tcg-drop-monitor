@@ -681,14 +681,20 @@ def main() -> int:
 
     seen = load_state()
     new_items = []
+    # Gesehen wird erst nach angenommenem Versand gespeichert (unten). Damit
+    # derselbe Artikel in einem Lauf trotzdem nur einmal gemeldet wird (zwei
+    # URLs, die normalize_url auf denselben Fingerprint zieht), laeuft die
+    # Dopplungs-Sperre fuer diesen Lauf ueber eine eigene Menge.
+    in_diesem_lauf = set()
 
     for src in SOURCES:
         hits = check_source(src)
         print(f"[{src['name']}] {len(hits)} heisse Treffer")
         for title, url, price in hits:
             fp = fingerprint(src["name"], title, url)
-            if fp in seen:
+            if fp in seen or fp in in_diesem_lauf:
                 continue
+            in_diesem_lauf.add(fp)
             new_items.append((src["category"], src["name"], title, url, price, fp))
         time.sleep(2)
 
