@@ -35,6 +35,9 @@ jobs:
         run: python drops.py
 
       - name: State committen
+        # Auch wenn drops.py rot endet (Telegram hat nicht angenommen): der
+        # Zustand ohne die offenen Treffer soll trotzdem gesichert werden.
+        if: success() || failure()
         run: |
           git config user.name "monitor-bot"
           git config user.email "monitor@localhost"

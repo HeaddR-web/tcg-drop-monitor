@@ -7,7 +7,7 @@ Meldet per Telegram neue Pokemon-Listungen und Pokemon-News, die nach
 NUR POKEMON (Entscheidung 23.08.2026). Whisky, Rum, LEGO, Vinyl, Merch und
 fremde Kartenspiele sind raus, samt ihrer Quellen und Bewertungslogik.
 
-Kein Auto-Buy. Die Kauf-Einschätzung (Marktwert, Flip vs. Hold) macht der Mensch
+Kein Auto-Buy. Die Kauf-Einschätzung (Marktwert, Flip vs. Hold) macht Stefanie
 mit Claude pro Alert, das Radar liefert die Frühwarnung.
 """
 
@@ -53,7 +53,7 @@ PRIO_BRANDS = [
     "prismatic", "erhabene helden", "fatale flammen",
 ]
 # Seit 02.09.2026 kommen die laufenden Sets aus zielsets.txt (eine Datei fuer
-# Monitor und Drop-Radar, von Hand gepflegt).
+# Monitor und Drop-Radar, von Stefanie selbst gepflegt).
 from zielsets import lade_zielsets
 PRIO_BRANDS += [z for z in lade_zielsets() if z not in PRIO_BRANDS]
 
@@ -184,7 +184,7 @@ SOURCES = [
 ]
 
 # --- Pokemon-Fokus -----------------------------------------------------------
-# gewuenscht: ausschliesslich Pokemon (Ansage 23.08.2026). Es gibt keinen
+# Stefanie will ausschliesslich Pokemon (Ansage 23.08.2026). Es gibt keinen
 # Schalter mehr zurueck auf andere Kategorien: Whisky, Rum, LEGO, Vinyl, Merch
 # und fremde Kartenspiele sind samt Quellen und Bewertungslogik entfernt.
 FOKUS = "pokemon"
@@ -229,7 +229,7 @@ JUBILAEUM_WOERTER = [
 ]
 
 
-# --- Sprach-Regel (Ansage 26.08.2026) -------------------------------
+# --- Sprach-Regel (Ansage Stefanie 26.08.2026) -------------------------------
 # Japanisch ist ausdruecklich erwuenscht, genauso Deutsch und Englisch.
 # Chinesische Ware will sie NICHT: der Sammlermarkt dafuer ist hier duenn und
 # die Wiederverkaufspreise liegen deutlich unter den JP- und EN-Fassungen.
@@ -246,7 +246,7 @@ CHINESISCH_MUSTER = re.compile(
 CHINESISCH_ZEICHEN = ("简体", "繁體", "繁体")
 
 
-# --- Fremde Sammelkartenspiele (Ansage 27.08.2026: "ich will Pokemon") ---
+# --- Fremde Sammelkartenspiele (Ansage Stefanie 27.08.2026: "ich will Pokemon") ---
 # Haendler wie CardCosmos fuehren auch Yu-Gi-Oh, Lorcana und Riftbound. Die
 # rutschten bisher ueber den Neuling-Verdacht durch: ein frisch angelegtes
 # Produkt, das nach Sammelkarten aussieht, wird absichtlich auch ohne
@@ -284,7 +284,7 @@ def ist_fremdes_tcg(titel: str) -> bool:
     return bool(FREMDES_TCG_MUSTER.search(titel))
 
 
-# --- Konvolut-Sperre (Ansage 26.08.2026) ----------------------------
+# --- Konvolut-Sperre (Ansage Stefanie 26.08.2026) ----------------------------
 # Privat zusammengewuerfelte Posten sind fuer das Flippen wertlos: Zustand
 # unbekannt, Inhalt nicht pruefbar, Wiederverkauf muehsam. Sie rutschten bisher
 # durch, weil die Kategorie-Wache absichtlich JEDEN neuen Artikel einer
@@ -358,7 +358,8 @@ def save_state(seen: set) -> None:
     STATE_FILE.write_text(json.dumps(sorted(seen), ensure_ascii=False))
 
 
-def _send(text: str, knoepfe: list = None) -> None:
+def _send(text: str, knoepfe: list = None) -> bool:
+    """True, wenn Telegram die Nachricht angenommen hat."""
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
@@ -373,29 +374,35 @@ def _send(text: str, knoepfe: list = None) -> None:
         )
         if r.status_code != 200:
             print(f"[WARN] Telegram-Fehler {r.status_code}: {r.text[:200]}")
+            return False
+        return True
     except Exception as e:
         print(f"[WARN] Telegram nicht erreichbar: {e}")
+        return False
 
 
-def notify(text: str, knoepfe: list = None) -> None:
-    """knoepfe ist die Bewertungs-Tastatur. Sie haengt unter genau EINER
+def notify(text: str, knoepfe: list = None) -> bool:
+    """True, wenn zugestellt (oder lokal ausgegeben). False bei Versandfehler.
+
+    knoepfe ist die Bewertungs-Tastatur. Sie haengt unter genau EINER
     Teilnachricht, und zwar der ersten: dort stehen die nummerierten Treffer."""
     if not BOT_TOKEN or not CHAT_ID:
         print("[WARN] Telegram-Credentials fehlen, Ausgabe nur lokal:")
         print(text)
-        return
+        return True
     if len(text) > 3800:
+        ok = True
         chunk, size, erste = [], 0, True
         for block in text.split("\n\n"):
             if size + len(block) > 3800 and chunk:
-                _send("\n\n".join(chunk), knoepfe if erste else None)
+                ok = _send("\n\n".join(chunk), knoepfe if erste else None) and ok
                 chunk, size, erste = [], 0, False
             chunk.append(block)
             size += len(block) + 2
         if chunk:
-            _send("\n\n".join(chunk), knoepfe if erste else None)
-        return
-    _send(text, knoepfe)
+            ok = _send("\n\n".join(chunk), knoepfe if erste else None) and ok
+        return ok
+    return _send(text, knoepfe)
 
 
 def fetch(url: str, name: str) -> str:
@@ -534,7 +541,7 @@ def assess(title: str, price: float, category: str):
             signals.append("Ultra Premium (Top-Sammlerstück)")
             hold, margin, verdict = "1-3 J", "+30-120%", "HOLD"
         if any(s in t for s in ("top-trainer", "top trainer", "elite trainer", "etb")):
-            # Kalibrierpunkt 02.09.2026: Mega-Entwicklung-ETB bei
+            # Kalibrierpunkt 02.09.2026 (Stefanie): Mega-Entwicklung-ETB bei
             # MediaMarkt AT 60 Euro, Sekundaermarkt 120. Zum Retail-Preis ist
             # eine ETB eines laufenden Sets ein Sofort-Flip, kein Pruef-Fall.
             signals.append("Top-Trainer-Box zum Retail (Kalibrierpunkt: 60 → 120)")
@@ -682,8 +689,7 @@ def main() -> int:
             fp = fingerprint(src["name"], title, url)
             if fp in seen:
                 continue
-            seen.add(fp)
-            new_items.append((src["category"], src["name"], title, url, price))
+            new_items.append((src["category"], src["name"], title, url, price, fp))
         time.sleep(2)
 
     if new_items:
@@ -691,7 +697,7 @@ def main() -> int:
         # schnelles Kapital (SOFORT-FLIP) oben, langsames (LANG-HOLD) unten.
         scored = []
         unrentabel = 0
-        for cat, shop, title, url, price in new_items:
+        for cat, shop, title, url, price, fp in new_items:
             verdict, atext = assess(title, price, cat)
             rank = SPEED.get(verdict, (9, ""))[0]
             # Rechnet sich nach Gebühren und Versand nichts, ist es kein Alarm
@@ -702,10 +708,11 @@ def main() -> int:
                 _game = _mw.guess_game(title) if cat in ("TCG", "Pokémon") else "keine"
                 if "LOHNT NICHT" in _mw.bewertung(title, price, _game) and not is_prio(title):
                     unrentabel += 1
+                    seen.add(fp)        # verworfen, nicht nochmal pruefen
                     continue
             except Exception:
                 pass
-            scored.append((rank, cat, shop, title, url, price, atext))
+            scored.append((rank, cat, shop, title, url, price, atext, fp))
         if unrentabel:
             print(f"--> {unrentabel} Treffer verworfen (rechnen sich netto nicht)")
         if not scored:
@@ -743,7 +750,7 @@ def main() -> int:
                 "wann": time.strftime("%Y-%m-%d %H:%M"),
             }
             return f"<code>[{nummer}]</code> "
-        for rank, cat, shop, title, url, price, atext in scored:
+        for rank, cat, shop, title, url, price, atext, fp in scored:
             if not ist_jubilaeum(title) and not trenner_gesetzt:
                 lines.append("———— sonstige Pokémon-Treffer ————\n")
                 trenner_gesetzt = True
@@ -778,9 +785,20 @@ def main() -> int:
             )
         if nummer > MAX_BEWERTBAR:
             lines.append(f"<i>Bewerten geht fuer die ersten {MAX_BEWERTBAR} Treffer.</i>\n")
-        notify("\n".join(lines), knoepfe or None)
-        speichere_gemeldet(gemeldet)
-        print(f"--> {len(new_items)} neue Drops gemeldet")
+        if notify("\n".join(lines), knoepfe or None):
+            speichere_gemeldet(gemeldet)
+            # Erst nach erfolgreichem Versand als gesehen merken (wie in
+            # monitor.py). Vorher galt ein Drop auch dann als erledigt, wenn
+            # Telegram ihn nie angenommen hatte (Befund Codex 13.09.2026).
+            for *_rest, fp in scored:
+                seen.add(fp)
+            print(f"--> {len(scored)} neue Drops gemeldet")
+            for _rank, _cat, shop, title, *_r in scored:
+                print(f"    gemeldet: [{shop}] {title[:110]}")
+        else:
+            print(f"--> Versand fehlgeschlagen, {len(scored)} Drops bleiben offen")
+            save_state(seen)
+            return 1
     else:
         print("--> nichts Neues")
 
