@@ -733,6 +733,24 @@ SOURCES = [
         "base": "https://www.smythstoys.com",
     },
     {
+        # Smyths Toys DE (gemessen 13.09.2026): listet alle neun Launch-Produkte
+        # des 30-Jahre-Sets zur UVP. Die Suchseite kommt nur mit Stufe 2 des
+        # Browser-Abrufs (real_chrome, solve_cloudflare, de-DE) durch, Stufe 1
+        # liefert Status 200 mit leerem Inhalt. Die Produktseiten stehen hinter
+        # einem Imperva-Klick-Check, der nicht umgangen wird: liefert die
+        # Produktseite keine Daten, geht der Treffer als "unklar" raus.
+        # Gleicher Parser wie Smyths AT, gleicher Detail-Deckel.
+        "name": "Smyths DE",
+        "urls": [
+            "https://www.smythstoys.com/de/de-de/search?text=pokemon%2030%20jahre",
+            "https://www.smythstoys.com/de/de-de/search?text=pokemon%20top%20trainer%20box",
+            "https://www.smythstoys.com/de/de-de/search?text=pokemon%20karten%20kollektion",
+        ],
+        "parser": "smyths",
+        "browser": True,
+        "base": "https://www.smythstoys.com",
+    },
+    {
         # Geizhals.at (gemessen 02.09.2026): Preisvergleich, per Browser lesbar.
         # Sammelquelle fuer oesterreichische Ladenpreis-Haendler, die selbst
         # nicht lesbar sind: Pagro & Libro (Cloudflare, auch mit Loeser 403),
@@ -1202,23 +1220,52 @@ def fetch_browser(url: str, name: str) -> str:
     if not os.path.exists(SCRAPLING):
         print(f"[{name}] Scrapling fehlt ({SCRAPLING}), Quelle uebersprungen")
         return ""
-    with tempfile.TemporaryDirectory() as d:
-        ziel = os.path.join(d, "seite.html")
-        try:
-            p = subprocess.run(
-                [SCRAPLING, "extract", "stealthy-fetch", url, ziel,
-                 "--disable-resources", "--network-idle", "--timeout", "60000"],
-                capture_output=True, text=True, timeout=150,
-            )
-        except Exception as e:
-            print(f"[{name}] Browser-Abruf fehlgeschlagen: {e}")
-            return ""
-        if os.path.exists(ziel):
-            with open(ziel, encoding="utf-8", errors="replace") as f:
-                html = f.read()
-            if html:
+    # Stufenleiter (seit 13.09.2026, gleiche Regel wie in der CLAUDE.md):
+    # Stufe 1 ist der Scrapling-Standard. Kommt nichts oder nur eine Huelle
+    # zurueck, folgt Stufe 2 mit echtem Chrome, Cloudflare-Loeser und
+    # deutscher Locale. Anlass: die Smyths-DE-Suche liefert in Stufe 1 einen
+    # Status 200 ohne Inhalt und erst in Stufe 2 die Trefferliste.
+    # Stufe 2 startet das installierte Google Chrome, deshalb nur als
+    # Rueckfall, nicht als Standard: doppelt so lange und auffaelliger.
+    stufen = [
+        ("Stufe 1", []),
+        ("Stufe 2", ["--real-chrome", "--solve-cloudflare", "--locale", "de-DE"]),
+    ]
+    fehler = ""
+    for stufe, extra in stufen:
+        with tempfile.TemporaryDirectory() as d:
+            ziel = os.path.join(d, "seite.html")
+            try:
+                p = subprocess.run(
+                    [SCRAPLING, "extract", "stealthy-fetch", url, ziel,
+                     "--disable-resources", "--network-idle",
+                     "--timeout", "60000", *extra],
+                    capture_output=True, text=True, timeout=150,
+                )
+            except Exception as e:
+                # Bewusst KEINE naechste Stufe (Gegenleser Kimi 14.09.2026):
+                # eine Exception ist hier praktisch immer der 150-s-Timeout,
+                # also ein haengender Server. Stufe 2 wuerde dann nochmal
+                # 150 s kosten und denselben Haenger treffen. Huellen und
+                # Bot-Waende kommen dagegen schnell zurueck, nur die
+                # bekommen die zweite Stufe.
+                print(f"[{name}] Browser-Abruf fehlgeschlagen ({stufe}): {e}")
+                return ""
+            html = ""
+            if os.path.exists(ziel):
+                with open(ziel, encoding="utf-8", errors="replace") as f:
+                    html = f.read()
+            # Unter 2000 Bytes ist es keine Shopseite, sondern eine Huelle
+            # (Smyths AT: 162-Byte-502, Smyths DE: leerer Body bei Status 200).
+            if len(html) >= 2000:
+                if stufe != "Stufe 1":
+                    print(f"[{name}] {stufe} hat die Seite geoeffnet ({len(html)} Bytes)")
                 return html
-        print(f"[{name}] Browser-Abruf leer: {(p.stderr or p.stdout)[-300:].strip()}")
+            fehler = (p.stderr or p.stdout)[-300:].strip()
+            print(f"[{name}] Browser-Abruf leer in {stufe} ({len(html)} Bytes), "
+                  + ("naechste Stufe" if stufe == "Stufe 1" else "aufgegeben"))
+    if fehler:
+        print(f"[{name}] letzte Meldung: {fehler}")
     return ""
 
 
