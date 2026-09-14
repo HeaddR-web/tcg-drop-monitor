@@ -468,7 +468,8 @@ def ist_jubilaeum(titel: str) -> bool:
 
 
 def ist_versiegelt(titel: str) -> bool:
-    """True nur bei versiegelter Ware (Display, Box, Bundle, Tin, Kollektion).
+    """True bei versiegelter Ware (Display, Box, Bundle, Tin, Kollektion) und
+    bei Jubilaeums-Titeln ohne Warenwort, sofern kein Merch- oder Karten-Tell.
 
     Einzelkarten sind der groesste Rauschherd: ein Shop legt taeglich hunderte
     an, sie sind fuer das Flippen uninteressant und begraben die zwei Meldungen,
@@ -481,7 +482,18 @@ def ist_versiegelt(titel: str) -> bool:
         return False
     if any(x in t for x in ZUBEHOER_TELLS):
         return False
-    return any(h in t for h in TCG_HINWEISE)
+    if any(h in t for h in TCG_HINWEISE):
+        return True
+    # Jubilaeums-Titel ohne Warenwort (gemessen 14.09.2026): Smyths DE nennt
+    # die ex-Kollektionen "Pokémon 30 Jahre Edition Feelinara-ex", ohne
+    # Karten, Box oder Kollektion im Namen. Die Regel oben warf beide raus,
+    # wie am 09.08. die Erste-Partner-Kollektion. Was Pokemon und 30 Jahre
+    # im Titel traegt und keinen Einzelkarten- oder Zubehoer-Tell hat, ist
+    # ein Sammelprodukt der Linie und zaehlt als versiegelt. Merch der Linie
+    # (Plüsch, Tasse, Figur, Poster ohne "Kollektion") bleibt draussen, denn
+    # is_relevant ueberspringt EXCLUDE bei Jubilaeums-Titeln und verlaesst
+    # sich auf diese Huerde hier (Kimi-Befund 14.09.2026).
+    return ist_jubilaeum(t) and "pok" in t and not any(x in t for x in EXCLUDE)
 
 
 # Woran eine Einzelkarte erkennbar ist, auch ohne das Wort "Einzelkarte":
@@ -768,6 +780,23 @@ SOURCES = [
         "parser": "geizhals",
         "browser": True,
         "base": "https://geizhals.at",
+    },
+    {
+        # Geizhals DE (gemessen 14.09.2026, eingebaut auf Ansage): dieselbe
+        # Plattform wie geizhals.at, deutsche Haendler. Die Suche "pokemon 30
+        # jahre" listet das ganze Jubilaeumsset mit je einem Angebot (Blister
+        # 12,99, Top-Trainer-Box 52,99, Tin-Boxen 24,99). Wert: macht Haendler
+        # sichtbar, die den Monitor direkt aussperren (Thalia, Kaufland,
+        # Galeria per curl 403). Gleicher Parser, gleiche Regeln, nur lokal.
+        "name": "Geizhals DE",
+        "urls": [
+            "https://geizhals.de/?fs=pokemon+30+jahre&in=",
+            "https://geizhals.de/?fs=pokemon+top-trainer-box&in=",
+            "https://geizhals.de/?fs=pokemon+ultra+premium&in=",
+        ],
+        "parser": "geizhals",
+        "browser": True,
+        "base": "https://geizhals.de",
     },
     # --- KATEGORIE-WACHE ------------------------------------------------------
     # Diese Quellen ueberwachen die KOMPLETTE Pokemon-Kategorie des Shops und
