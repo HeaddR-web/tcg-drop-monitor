@@ -1207,6 +1207,22 @@ def normalize_url(url: str) -> str:
     return u.rstrip("/")
 
 
+def warenkorb_link(shop: str, url: str) -> str:
+    """Amazon-Direktlink in den Einkaufswagen (Add-to-Cart-Adresse aus der
+    Amazon-Associates-Doku, seit 15.09.2026). Ein Tipp legt den Artikel in den
+    Korb, gekauft wird von Hand. Nicht eingeloggt fuehrt Amazon erst zur
+    Anmeldung und danach in den Korb (gemessen 15.09.2026, ausgeloggt). Der
+    Korb nimmt das Buy-Box-Angebot der ASIN, das kann ein anderer Verkaeufer
+    sein als der auf der Suchseite (Gegenleser Codex). Andere Shops haben
+    keine solche Adresse."""
+    if shop != "Amazon.de":
+        return ""
+    m = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", url)
+    if not m:
+        return ""
+    return f"https://www.amazon.de/gp/aws/cart/add.html?ASIN.1={m.group(1)}&Quantity.1=1"
+
+
 def fingerprint(source: str, title: str, url: str) -> str:
     # Shop + normalisierte URL. Titel schwankt bei manchen Shops ("Auf Lager"),
     # rohe URLs schwanken bei Amazon -> beides würde Duplikate erzeugen.
@@ -1891,8 +1907,10 @@ def main() -> int:
                     "url": url,
                     "wann": time.strftime("%Y-%m-%d %H:%M"),
                 }
+            korb = warenkorb_link(shop, url)
+            korb_html = f" · <a href=\"{escape(korb, quote=True)}\">🛒 IN DEN KORB</a>" if korb else ""
             lines.append(
-                f"{marke}{flag}<b>{shop}</b> · {tag} · <a href=\"{escape(url, quote=True)}\">LINK</a>\n"
+                f"{marke}{flag}<b>{shop}</b> · {tag} · <a href=\"{escape(url, quote=True)}\">LINK</a>{korb_html}\n"
                 f"{escape(title)}\n"
                 f"{wert}"
                 f"↳ Resell: {resell_links(title)}\n"
