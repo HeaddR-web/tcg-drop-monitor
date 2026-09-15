@@ -699,6 +699,12 @@ SOURCES = [
             "https://www.saturn.de/de/search.html?query=ps5%20pro",   # Zielprodukt
         ],
         "parser": "jsonld",
+        # Saturn antwortet requests UND curl seit 15.09.2026 mit 403 und einer
+        # Captcha-Seite (gemessen 19:29 Uhr, 7719 Bytes, vorher 2 bis 4 Treffer
+        # je Lauf). Scrapling Stufe 1 kommt durch (200, 21 Suchergebnisse).
+        # Deshalb "browser": True wie MediaMarkt AT, Saturn stand ohnehin nur
+        # in der Mac-Liste (SOURCES_ONLY in scripts/local-monitor.sh).
+        "browser": True,
         "base": "https://www.saturn.de",
     },
     # --- OESTERREICH (seit 02.09.2026) -------------------------------------
@@ -1218,15 +1224,26 @@ def fetch(url: str, name: str) -> str:
 
     import subprocess
     try:
+        # "-w" haengt den echten HTTP-Status hinter den Body. Vorher galt
+        # curl-Rueckgabewert 0 als Erfolg, und der ist auch bei 403 Null:
+        # Saturn lieferte am 15.09.2026 eine Captcha-Seite mit 403, der Lauf
+        # meldete still "0 relevante Treffer". Gegenleser Codex und Grok
+        # (15.09.2026): Status pruefen statt Body-Heuristik.
         p = subprocess.run(
             ["curl", "-sS", "--max-time", "25",
              "-A", HEADERS["User-Agent"],
              "-H", f"Accept-Language: {HEADERS['Accept-Language']}",
+             "-w", "\n%{http_code}",
              url],
             capture_output=True, text=True, timeout=30,
         )
         if p.returncode == 0 and p.stdout:
-            return p.stdout
+            body, _, code = p.stdout.rpartition("\n")
+            if code.strip() == "200" and body:
+                return body
+            print(f"[{name}] HTTP {status if status is not None else 'Fehler'} (requests) / "
+                  f"{code.strip() or '?'} (curl) – uebersprungen")
+            return ""
     except Exception:
         pass
     if status is not None:
@@ -1351,7 +1368,11 @@ def check_jsonld(src: dict) -> list:
                     if not verfuegbar and ziel_treffer(titel):
                         # Zielprodukte sind selten und teuer: da lohnt der
                         # Blick auf die Produktseite, die den Status traegt.
-                        seite = fetch(link, src["name"])
+                        # Browser-Quellen (Saturn, MediaMarkt AT) auch hier
+                        # ueber den Browser, sonst kommt die Sperrseite und
+                        # der Status bleibt "unklar" (Gegenleser Codex 15.09.2026).
+                        holen = fetch_browser if src.get("browser") else fetch
+                        seite = holen(link, src["name"])
                         status = _status_aus_produktseite(seite) if seite else "unklar"
                     if sonderfall(titel):
                         status = ""      # Raffle immer melden
