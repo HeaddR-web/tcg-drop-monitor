@@ -688,6 +688,10 @@ SOURCES = [
             "https://www.mediamarkt.de/de/search.html?query=ps5%20pro",   # Zielprodukt
         ],
         "parser": "jsonld",
+        # MediaMarkt.de sperrt seit 15.09.2026 20 Uhr wie Saturn: requests und
+        # curl bekommen 403 mit Captcha (um 19:29 kam requests noch durch).
+        # Deshalb ebenfalls ueber den Browser, steht schon in der Mac-Liste.
+        "browser": True,
         "base": "https://www.mediamarkt.de",
     },
     {
